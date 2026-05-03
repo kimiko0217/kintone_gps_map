@@ -53,11 +53,30 @@
         return y + '/' + mo + '/' + day + ' ' + h + ':' + mi;
       }
 
+      function lerpColor(t) {
+        const from = { r: 0xaa, g: 0xaa, b: 0xaa };
+        const to   = { r: 0x1a, g: 0x6f, b: 0xcc };
+        const r = Math.round(from.r + (to.r - from.r) * t);
+        const g = Math.round(from.g + (to.g - from.g) * t);
+        const b = Math.round(from.b + (to.b - from.b) * t);
+        return 'rgb(' + r + ',' + g + ',' + b + ')';
+      }
+
+      var latestStart = Math.max(0, points.length - 10);
+
       points.forEach(function(p, i) {
+        var color;
+        if (i < latestStart) {
+          color = '#aaaaaa';
+        } else {
+          var t = (i - latestStart) / 9;
+          color = lerpColor(t);
+        }
+
         var marker = L.circleMarker([p.lat, p.lng], {
           radius: 6,
-          color: 'blue',
-          fillColor: 'blue',
+          color: color,
+          fillColor: color,
           fillOpacity: 0.8
         }).addTo(map);
 
