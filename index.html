@@ -4,16 +4,68 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GPS Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: sans-serif; }
     #map { width: 100vw; height: 100vh; }
+    #no-data {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+      font-size: 1.5rem;
+      color: #666;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // TODO: 地図の初期化処理をここに追加
+    var points = <?!= pointsJson ?>;
+
+    if (points.length === 0) {
+      document.getElementById('map').innerHTML = '<div id="no-data">データがありません</div>';
+    } else {
+      var last = points[points.length - 1];
+      var map = L.map('map').setView([last.lat, last.lng], 15);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      function formatDatetime(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        var y = d.getUTCFullYear();
+        var mo = ('0' + (d.getUTCMonth() + 1)).slice(-2);
+        var day = ('0' + d.getUTCDate()).slice(-2);
+        var h = ('0' + (d.getUTCHours() + 9)).slice(-2);
+        var mi = ('0' + d.getUTCMinutes()).slice(-2);
+        // 時が24を超える場合は日付を繰り上げ
+        var jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+        y = jst.getUTCFullYear();
+        mo = ('0' + (jst.getUTCMonth() + 1)).slice(-2);
+        day = ('0' + jst.getUTCDate()).slice(-2);
+        h = ('0' + jst.getUTCHours()).slice(-2);
+        mi = ('0' + jst.getUTCMinutes()).slice(-2);
+        return y + '/' + mo + '/' + day + ' ' + h + ':' + mi;
+      }
+
+      points.forEach(function(p, i) {
+        var marker = L.circleMarker([p.lat, p.lng], {
+          radius: 6,
+          color: 'blue',
+          fillColor: 'blue',
+          fillOpacity: 0.8
+        }).addTo(map);
+
+        if (p.datetime) {
+          marker.bindPopup(formatDatetime(p.datetime));
+        }
+      });
+    }
   </script>
 </body>
 </html>
