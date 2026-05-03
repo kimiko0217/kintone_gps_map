@@ -54,8 +54,8 @@
       }
 
       function lerpColor(t) {
-        const from = { r: 0xaa, g: 0xaa, b: 0xaa };
-        const to   = { r: 0x1a, g: 0x6f, b: 0xcc };
+        const from = { r: 0x1a, g: 0x6f, b: 0xcc };
+        const to   = { r: 0xcc, g: 0x1a, b: 0x1a };
         const r = Math.round(from.r + (to.r - from.r) * t);
         const g = Math.round(from.g + (to.g - from.g) * t);
         const b = Math.round(from.b + (to.b - from.b) * t);
@@ -67,7 +67,7 @@
       points.forEach(function(p, i) {
         var color;
         if (i < latestStart) {
-          color = '#aaaaaa';
+          color = '#1a6fcc';
         } else {
           var t = (i - latestStart) / 9;
           color = lerpColor(t);
