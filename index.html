@@ -62,15 +62,14 @@
       document.getElementById('map').innerHTML = '<div id="no-data">データがありません</div>';
     } else {
       var last = points[points.length - 1];
-      var map = L.map('map').setView([last.lat, last.lng], 15);
-
-      var isMobile = ('ontouchstart' in window) || window.innerWidth <= 768;
+      var isMobile = window.innerWidth <= 768;
+      var initialZoom  = isMobile ? 17 : 15;
       var markerRadius = isMobile ? 12 : 6;
-      var iconSize    = isMobile ? 32 : 16;
-      var iconAnchor  = isMobile ? 16 : 8;
-      var popupAnchor = isMobile ? -16 : -8;
+      var iconSize     = isMobile ? 32 : 16;
+      var iconAnchor   = isMobile ? 16 : 8;
+      var popupAnchor  = isMobile ? -16 : -8;
 
-      if (isMobile) map.setZoom(16);
+      var map = L.map('map').setView([last.lat, last.lng], initialZoom);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
