@@ -74,9 +74,10 @@
 
       var map = L.map('map').setView([last.lat, last.lng], initialZoom);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', Object.assign(
+        { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' },
+        isMobile ? { tileSize: 512, zoomOffset: -1 } : {}
+      )).addTo(map);
 
       function formatDatetime(iso) {
         if (!iso) return '';
@@ -175,6 +176,14 @@
             '<button data-mode="1">1週間</button>' +
             '<button data-mode="2">4週間</button>';
           L.DomEvent.disableClickPropagation(div);
+          if (isMobile) {
+            div.querySelectorAll('button').forEach(function(btn) {
+              btn.style.height = '132px';
+              btn.style.fontSize = '45px';
+              btn.style.minWidth = '198px';
+              btn.style.padding = '0 42px';
+            });
+          }
           div.querySelectorAll('button').forEach(function(btn) {
             L.DomEvent.on(btn, 'click', function() {
               map.removeLayer(layers[currentMode]);
