@@ -1,5 +1,15 @@
+function haversine(lat1, lon1, lat2, lon2) {
+  var R = 6371000;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLon = (lon2 - lon1) * Math.PI / 180;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function doGet(e) {
-  const CACHE_KEY = 'gps_map_points_v9';
+  const CACHE_KEY = 'gps_map_points_v10';
   const CACHE_TTL = 300; // 5分
 
   // キャッシュヒット時は即返す
@@ -15,7 +25,9 @@ function doGet(e) {
   const domain = props.getProperty('KINTONE_DOMAIN');
   const appId = props.getProperty('APP_ID');
   const apiToken = props.getProperty('API_TOKEN');
-  const apiTokenRekishi = props.getProperty('KINTONE_API_TOKEN_REKISHI');
+  const apiTokenMichinoekiRireki = props.getProperty('KINTONE_API_TOKEN_MICHINOEKI_RIREKI');
+  const appIdExclude = props.getProperty('KINTONE_APP_ID_EXCLUDE');
+  const apiTokenExclude = props.getProperty('KINTONE_API_TOKEN_EXCLUDE');
   const fieldLat = props.getProperty('FIELD_LAT');
   const fieldLng = props.getProperty('FIELD_LNG');
   const fieldDatetime = props.getProperty('FIELD_DATETIME');
@@ -50,7 +62,6 @@ function doGet(e) {
     const latestDateMs = new Date(latestJSTDate).getTime();
 
     // Step1: GPSレコード取得（送信日時あり・27日前0時以降、最大4ページを並列取得）
-    // offsetはkintoneクエリ文字列に含める必要がある（URLパラメータ不可）
     const gpsFilter = fieldDatetime + ' >= "' + cutoff27Str + '" and ' + fieldDatetime + ' != "" order by ' + fieldDatetime + ' asc limit 500';
     const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY]
       .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
@@ -67,7 +78,6 @@ function doGet(e) {
       const data = JSON.parse(response.getContentText());
       (data.records || []).forEach(function(r) { allGpsRecords.push(r); });
     });
-    // ページは昇順で返るため追加ソート不要
 
     allGpsRecords.forEach(function(record) {
       const latVal = record[fieldLat] && record[fieldLat].value;
@@ -88,8 +98,36 @@ function doGet(e) {
       points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', daysAgo: daysAgo });
     });
 
-    // Step2: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
-    if (apiTokenRekishi) {
+    // Step2: 除外エリアによるフィルタリング
+    if (appIdExclude && apiTokenExclude) {
+      const excludeUrl = 'https://' + domain + '/k/v1/records.json'
+        + '?app=' + appIdExclude
+        + '&fields[0]=lat&fields[1]=lon&fields[2]=radius_m&fields[3]=name';
+      const excludeData = JSON.parse(UrlFetchApp.fetch(excludeUrl, {
+        method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenExclude }, muteHttpExceptions: true
+      }).getContentText());
+
+      if (excludeData.records && excludeData.records.length > 0) {
+        const excludeZones = excludeData.records.map(function(r) {
+          return {
+            lat: parseFloat(r['lat'] && r['lat'].value),
+            lon: parseFloat(r['lon'] && r['lon'].value),
+            radius_m: parseFloat(r['radius_m'] && r['radius_m'].value)
+          };
+        }).filter(function(z) {
+          return !isNaN(z.lat) && !isNaN(z.lon) && !isNaN(z.radius_m);
+        });
+
+        points = points.filter(function(pt) {
+          return !excludeZones.some(function(z) {
+            return haversine(pt.lat, pt.lng, z.lat, z.lon) <= z.radius_m;
+          });
+        });
+      }
+    }
+
+    // Step3: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
+    if (apiTokenMichinoekiRireki) {
       const rekishiUrl = 'https://' + domain + '/k/v1/records.json'
         + '?app=17'
         + '&query=' + encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by ' + FIELD_KEY + ' asc limit 500')
@@ -97,7 +135,7 @@ function doGet(e) {
         + '&fields[1]=name';
 
       const rekishiData = JSON.parse(UrlFetchApp.fetch(rekishiUrl, {
-        method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenRekishi }, muteHttpExceptions: true
+        method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenMichinoekiRireki }, muteHttpExceptions: true
       }).getContentText());
 
       const nameMap = {};
@@ -109,12 +147,12 @@ function doGet(e) {
         });
       }
 
-      // Step3: GPSレコードにname付加
-      points.forEach(function(p) { p.name = nameMap[p.key] || ''; });
+      // Step4: GPSレコードにname付加
+      points.forEach(function(pt) { pt.name = nameMap[pt.key] || ''; });
     }
 
     // クライアントに不要なkeyを除去
-    points.forEach(function(p) { delete p.key; });
+    points.forEach(function(pt) { delete pt.key; });
   } catch (err) {
     Logger.log(err);
   }
