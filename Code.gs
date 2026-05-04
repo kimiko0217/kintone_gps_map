@@ -222,6 +222,18 @@ function debugRekishi() {
 }
 
 function doGet(e) {
+  const CACHE_KEY = 'gps_map_points';
+  const CACHE_TTL = 300; // 5分
+
+  // キャッシュヒット時は即返す
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(CACHE_KEY);
+  if (cached) {
+    const tmpl = HtmlService.createTemplateFromFile('index');
+    tmpl.pointsJson = cached;
+    return tmpl.evaluate().setTitle('GPS Map').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
   const props = PropertiesService.getScriptProperties();
   const domain = props.getProperty('KINTONE_DOMAIN');
   const appId = props.getProperty('APP_ID');
@@ -259,40 +271,30 @@ function doGet(e) {
     const cutoff6  = jstMidnight(6);
     const cutoff27Str = Utilities.formatDate(cutoff27, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
 
-    // Step1: GPSレコードをページネーションで全件取得（27日前0時以降、古い順）
-    const gpsBaseQuery = '作成日時 >= "' + cutoff27Str + '" order by 作成日時 asc limit 500';
+    // Step1: GPSレコード取得（27日前0時以降、新しい順に500件取得後に反転）
+    const gpsQuery = encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by 作成日時 desc limit 500');
     const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY, '作成日時']
       .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
-    const gpsBaseUrl = 'https://' + domain + '/k/v1/records.json?app=' + appId
-      + '&query=' + encodeURIComponent(gpsBaseQuery) + '&' + gpsFields;
+    const gpsData = JSON.parse(UrlFetchApp.fetch(
+      'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + gpsQuery + '&' + gpsFields,
+      { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true }
+    ).getContentText());
 
-    let offset = 0;
-    while (true) {
-      const gpsData = JSON.parse(UrlFetchApp.fetch(
-        gpsBaseUrl + '&offset=' + offset,
-        { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true }
-      ).getContentText());
+    (gpsData.records || []).reverse().forEach(function(record) {
+      const latVal = record[fieldLat] && record[fieldLat].value;
+      const lngVal = record[fieldLng] && record[fieldLng].value;
+      if (latVal === '' || latVal == null || lngVal === '' || lngVal == null) return;
+      const lat = parseFloat(latVal);
+      const lng = parseFloat(lngVal);
+      if (isNaN(lat) || isNaN(lng)) return;
 
-      const records = gpsData.records || [];
-      records.forEach(function(record) {
-        const latVal = record[fieldLat] && record[fieldLat].value;
-        const lngVal = record[fieldLng] && record[fieldLng].value;
-        if (latVal === '' || latVal == null || lngVal === '' || lngVal == null) return;
-        const lat = parseFloat(latVal);
-        const lng = parseFloat(lngVal);
-        if (isNaN(lat) || isNaN(lng)) return;
+      const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
+      const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
+      const createdVal = record['作成日時'] && record['作成日時'].value;
+      const isOld = createdVal ? new Date(createdVal) < cutoff6 : true;
 
-        const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
-        const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
-        const createdVal = record['作成日時'] && record['作成日時'].value;
-        const isOld = createdVal ? new Date(createdVal) < cutoff6 : true;
-
-        points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', isOld: isOld });
-      });
-
-      if (records.length < 500) break;
-      offset += 500;
-    }
+      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', isOld: isOld });
+    });
 
     // Step2: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
     if (apiTokenRekishi) {
@@ -318,12 +320,24 @@ function doGet(e) {
       // Step3: GPSレコードにname付加
       points.forEach(function(p) { p.name = nameMap[p.key] || ''; });
     }
+
+    // クライアントに不要なkeyを除去
+    points.forEach(function(p) { delete p.key; });
   } catch (err) {
     Logger.log(err);
   }
 
+  const pointsJson = JSON.stringify(points);
+
+  // キャッシュに保存（100KB上限を超える場合は保存しない）
+  try {
+    if (pointsJson.length <= 100000) cache.put(CACHE_KEY, pointsJson, CACHE_TTL);
+  } catch (err) {
+    Logger.log('Cache put failed: ' + err);
+  }
+
   const tmpl = HtmlService.createTemplateFromFile('index');
-  tmpl.pointsJson = JSON.stringify(points);
+  tmpl.pointsJson = pointsJson;
 
   return tmpl.evaluate()
     .setTitle('GPS Map')
