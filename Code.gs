@@ -259,30 +259,40 @@ function doGet(e) {
     const cutoff6  = jstMidnight(6);
     const cutoff27Str = Utilities.formatDate(cutoff27, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
 
-    // Step1: GPSレコード取得（27日前0時以降、新しい順に500件取得後に反転）
-    const gpsQuery = encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by 作成日時 desc limit 500');
+    // Step1: GPSレコードをページネーションで全件取得（27日前0時以降、古い順）
+    const gpsBaseQuery = '作成日時 >= "' + cutoff27Str + '" order by 作成日時 asc limit 500';
     const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY, '作成日時']
       .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
-    const gpsData = JSON.parse(UrlFetchApp.fetch(
-      'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + gpsQuery + '&' + gpsFields,
-      { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true }
-    ).getContentText());
+    const gpsBaseUrl = 'https://' + domain + '/k/v1/records.json?app=' + appId
+      + '&query=' + encodeURIComponent(gpsBaseQuery) + '&' + gpsFields;
 
-    (gpsData.records || []).reverse().forEach(function(record) {
-      const latVal = record[fieldLat] && record[fieldLat].value;
-      const lngVal = record[fieldLng] && record[fieldLng].value;
-      if (latVal === '' || latVal == null || lngVal === '' || lngVal == null) return;
-      const lat = parseFloat(latVal);
-      const lng = parseFloat(lngVal);
-      if (isNaN(lat) || isNaN(lng)) return;
+    let offset = 0;
+    while (true) {
+      const gpsData = JSON.parse(UrlFetchApp.fetch(
+        gpsBaseUrl + '&offset=' + offset,
+        { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true }
+      ).getContentText());
 
-      const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
-      const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
-      const createdVal = record['作成日時'] && record['作成日時'].value;
-      const isOld = createdVal ? new Date(createdVal) < cutoff6 : true;
+      const records = gpsData.records || [];
+      records.forEach(function(record) {
+        const latVal = record[fieldLat] && record[fieldLat].value;
+        const lngVal = record[fieldLng] && record[fieldLng].value;
+        if (latVal === '' || latVal == null || lngVal === '' || lngVal == null) return;
+        const lat = parseFloat(latVal);
+        const lng = parseFloat(lngVal);
+        if (isNaN(lat) || isNaN(lng)) return;
 
-      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', isOld: isOld });
-    });
+        const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
+        const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
+        const createdVal = record['作成日時'] && record['作成日時'].value;
+        const isOld = createdVal ? new Date(createdVal) < cutoff6 : true;
+
+        points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', isOld: isOld });
+      });
+
+      if (records.length < 500) break;
+      offset += 500;
+    }
 
     // Step2: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
     if (apiTokenRekishi) {
