@@ -17,38 +17,43 @@
       font-size: 1.5rem;
       color: #666;
     }
-    #mode-btns {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
-      display: flex;
-      gap: 4px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-    }
-    #mode-btns button {
-      padding: 8px 12px;
+    .mode-ctrl { display: flex; }
+    .mode-ctrl button {
+      padding: 0 12px;
+      height: 36px;
       background: white;
-      border: 1px solid #999;
+      border: 1px solid #bbb;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
+      min-width: 58px;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
     }
-    #mode-btns button:first-child { border-radius: 4px 0 0 4px; }
-    #mode-btns button:last-child  { border-radius: 0 4px 4px 0; }
-    #mode-btns button.active {
+    .mode-ctrl button:not(:last-child) { border-right: none; }
+    .mode-ctrl button:first-child { border-radius: 4px 0 0 4px; }
+    .mode-ctrl button:last-child  { border-radius: 0 4px 4px 0; }
+    .mode-ctrl button.active {
       background: #1a6fcc;
       color: white;
       border-color: #1a6fcc;
     }
+    @media (max-width: 768px) {
+      .mode-ctrl button {
+        height: 44px;
+        font-size: 15px;
+        min-width: 66px;
+        padding: 0 14px;
+      }
+    }
+    .leaflet-popup-content {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .leaflet-popup-content a { color: #1a6fcc; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="mode-btns">
-    <button data-mode="0" class="active">当日のみ</button>
-    <button data-mode="1">1週間</button>
-    <button data-mode="2">4週間</button>
-  </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     var points = <?!= pointsJson ?>;
@@ -58,6 +63,14 @@
     } else {
       var last = points[points.length - 1];
       var map = L.map('map').setView([last.lat, last.lng], 15);
+
+      var isMobile = ('ontouchstart' in window) || window.innerWidth <= 768;
+      var markerRadius = isMobile ? 12 : 6;
+      var iconSize    = isMobile ? 32 : 16;
+      var iconAnchor  = isMobile ? 16 : 8;
+      var popupAnchor = isMobile ? -16 : -8;
+
+      if (isMobile) map.setZoom(16);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -117,15 +130,15 @@
           marker = L.marker([p.lat, p.lng], {
             icon: L.icon({
               iconUrl: 'https://raw.githubusercontent.com/kimiko0217/kintone_gps_map/main/images/michinoeki.png',
-              iconSize: [16, 16],
-              iconAnchor: [8, 8],
-              popupAnchor: [0, -8]
+              iconSize: [iconSize, iconSize],
+              iconAnchor: [iconAnchor, iconAnchor],
+              popupAnchor: [0, popupAnchor]
             })
           });
         } else {
           var color = makeColor(p);
           marker = L.circleMarker([p.lat, p.lng], {
-            radius: 6,
+            radius: markerRadius,
             color: color,
             fillColor: color,
             fillOpacity: 0.8
@@ -150,16 +163,30 @@
       var currentMode = 0;
       layers[currentMode].addTo(map);
 
-      document.querySelectorAll('#mode-btns button').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          map.removeLayer(layers[currentMode]);
-          currentMode = parseInt(this.dataset.mode);
-          layers[currentMode].addTo(map);
-          document.querySelectorAll('#mode-btns button').forEach(function(b) {
-            b.classList.toggle('active', parseInt(b.dataset.mode) === currentMode);
+      // Leafletコントロールとしてボタンを追加
+      var ModeControl = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd: function() {
+          var div = L.DomUtil.create('div', 'mode-ctrl');
+          div.innerHTML =
+            '<button data-mode="0" class="active">当日のみ</button>' +
+            '<button data-mode="1">1週間</button>' +
+            '<button data-mode="2">4週間</button>';
+          L.DomEvent.disableClickPropagation(div);
+          div.querySelectorAll('button').forEach(function(btn) {
+            L.DomEvent.on(btn, 'click', function() {
+              map.removeLayer(layers[currentMode]);
+              currentMode = parseInt(btn.dataset.mode);
+              layers[currentMode].addTo(map);
+              div.querySelectorAll('button').forEach(function(b) {
+                b.classList.toggle('active', parseInt(b.dataset.mode) === currentMode);
+              });
+            });
           });
-        });
+          return div;
+        }
       });
+      map.addControl(new ModeControl());
     }
   </script>
 </body>
