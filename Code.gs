@@ -222,7 +222,7 @@ function debugRekishi() {
 }
 
 function doGet(e) {
-  const CACHE_KEY = 'gps_map_points';
+  const CACHE_KEY = 'gps_map_points_v4';
   const CACHE_TTL = 300; // 5分
 
   // キャッシュヒット時は即返す
@@ -271,7 +271,7 @@ function doGet(e) {
     const cutoff6  = jstMidnight(6);
     const cutoff27Str = Utilities.formatDate(cutoff27, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
 
-    // Step1: GPSレコード取得（27日前0時以降、並列ページネーションで全件取得）
+    // Step1: GPSレコード取得（27日前0時以降、最大4ページを並列取得）
     const gpsQuery = encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by 作成日時 asc limit 500');
     const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY, '作成日時']
       .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
@@ -279,24 +279,17 @@ function doGet(e) {
       + '&query=' + gpsQuery + '&' + gpsFields;
     const fetchOptions = { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true };
 
-    // 1ページ目を取得しつつtotalCountも取得
-    const firstData = JSON.parse(UrlFetchApp.fetch(
-      gpsBaseUrl + '&totalCount=true&offset=0', fetchOptions
-    ).getContentText());
-    let allGpsRecords = firstData.records || [];
-    const totalCount = parseInt(firstData.totalCount) || 0;
-
-    // 2ページ目以降を並列取得
-    if (totalCount > 500) {
-      const remainingRequests = [];
-      for (let offset = 500; offset < totalCount; offset += 500) {
-        remainingRequests.push(Object.assign({ url: gpsBaseUrl + '&offset=' + offset }, fetchOptions));
-      }
-      UrlFetchApp.fetchAll(remainingRequests).forEach(function(response) {
-        const data = JSON.parse(response.getContentText());
-        allGpsRecords = allGpsRecords.concat(data.records || []);
-      });
-    }
+    const requests = [0, 500, 1000, 1500].map(function(offset) {
+      return Object.assign({ url: gpsBaseUrl + '&offset=' + offset }, fetchOptions);
+    });
+    const allGpsRecords = [];
+    UrlFetchApp.fetchAll(requests).forEach(function(response) {
+      const data = JSON.parse(response.getContentText());
+      (data.records || []).forEach(function(r) { allGpsRecords.push(r); });
+    });
+    allGpsRecords.sort(function(a, b) {
+      return a['作成日時'].value < b['作成日時'].value ? -1 : 1;
+    });
 
     allGpsRecords.forEach(function(record) {
       const latVal = record[fieldLat] && record[fieldLat].value;
