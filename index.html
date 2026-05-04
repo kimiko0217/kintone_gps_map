@@ -177,10 +177,10 @@
           L.DomEvent.disableClickPropagation(div);
           if (isMobile) {
             div.querySelectorAll('button').forEach(function(btn) {
-              btn.style.height = '132px';
+              btn.style.height = 'auto';
               btn.style.fontSize = '45px';
-              btn.style.minWidth = '198px';
-              btn.style.padding = '0 42px';
+              btn.style.minWidth = '0';
+              btn.style.padding = '24px';
             });
           }
           div.querySelectorAll('button').forEach(function(btn) {
