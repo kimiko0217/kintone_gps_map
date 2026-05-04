@@ -65,6 +65,9 @@
       document.getElementById('map').innerHTML = '<div id="no-data">データがありません</div>';
     } else {
       var last = points[points.length - 1];
+      // GASウェブアプリはviewportを980pxに固定するため window.innerWidth が常に980を返す。
+      // そのためCSSの @media (max-width:768px) も機能しない。
+      // window.screen.width は端末の物理CSS幅を返すため、こちらでスマホ判定する。
       var isMobile = window.screen.width <= 768;
       var initialZoom  = isMobile ? 17 : 15;
       var markerRadius = isMobile ? 18 : 7;
@@ -175,6 +178,8 @@
             '<button data-mode="1">1週間</button>' +
             '<button data-mode="2">4週間</button>';
           L.DomEvent.disableClickPropagation(div);
+          // CSSの @media クエリがGASのviewport固定(980px)により機能しないため、
+          // JavaScriptで直接インラインスタイルを設定してスマホ用サイズを適用する。
           if (isMobile) {
             div.querySelectorAll('button').forEach(function(btn) {
               btn.style.height = 'auto';
