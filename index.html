@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>GPS Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -62,12 +65,12 @@
       document.getElementById('map').innerHTML = '<div id="no-data">データがありません</div>';
     } else {
       var last = points[points.length - 1];
-      var isMobile = window.innerWidth <= 768;
+      var isMobile = window.screen.width <= 768;
       var initialZoom  = isMobile ? 17 : 15;
-      var markerRadius = isMobile ? 12 : 6;
-      var iconSize     = isMobile ? 32 : 16;
-      var iconAnchor   = isMobile ? 16 : 8;
-      var popupAnchor  = isMobile ? -16 : -8;
+      var markerRadius = isMobile ? 24 : 9;
+      var iconSize     = isMobile ? 64 : 24;
+      var iconAnchor   = isMobile ? 32 : 12;
+      var popupAnchor  = isMobile ? -32 : -12;
 
       var map = L.map('map').setView([last.lat, last.lng], initialZoom);
 
