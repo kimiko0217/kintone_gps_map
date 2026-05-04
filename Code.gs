@@ -8,18 +8,22 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// HTMLのみ即返却する。データ取得を getPoints() に分離することで、
+// ブラウザがHTMLを受け取った直後にスピナーを表示できる。
+// データはクライアントが google.script.run.getPoints() で非同期取得する。
 function doGet(e) {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('GPS Map')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function getPoints() {
   const CACHE_KEY = 'gps_map_points_v10';
   const CACHE_TTL = 300; // 5分
 
-  // キャッシュヒット時は即返す
   const cache = CacheService.getScriptCache();
   const cached = cache.get(CACHE_KEY);
-  if (cached) {
-    const tmpl = HtmlService.createTemplateFromFile('index');
-    tmpl.pointsJson = cached;
-    return tmpl.evaluate().setTitle('GPS Map').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  }
+  if (cached) return JSON.parse(cached);
 
   const props = PropertiesService.getScriptProperties();
   const domain = props.getProperty('KINTONE_DOMAIN');
@@ -59,7 +63,6 @@ function doGet(e) {
 
     const cutoff27 = jstMidnight(27);
     const cutoff27Str = Utilities.formatDate(cutoff27, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
-    // 最新日のJST日付（daysAgo計算の基準）
     const latestDateMs = new Date(latestJSTDate).getTime();
 
     // Step1: GPSレコード取得（送信日時あり・27日前0時以降、最大4ページを並列取得）
@@ -167,10 +170,5 @@ function doGet(e) {
     Logger.log('Cache put failed: ' + err);
   }
 
-  const tmpl = HtmlService.createTemplateFromFile('index');
-  tmpl.pointsJson = pointsJson;
-
-  return tmpl.evaluate()
-    .setTitle('GPS Map')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return points;
 }

@@ -53,17 +53,52 @@
       line-height: 1.6;
     }
     .leaflet-popup-content a { color: #1a6fcc; }
+    #loading {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      z-index: 9999;
+      gap: 16px;
+      font-size: 1.2rem;
+      color: #666;
+    }
+    .loading-spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #ddd;
+      border-top-color: #1a6fcc;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
+  <!-- doGet() がHTMLのみ即返却するため、ページ読み込み直後にこのスピナーが表示される。
+       データは google.script.run.getPoints() で非同期取得し、完了後に地図を構築する。 -->
+  <div id="loading">
+    <div class="loading-spinner"></div>
+    <div>読み込み中...</div>
+  </div>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    var points = <?!= pointsJson ?>;
+    function hideLoading() {
+      var el = document.getElementById('loading');
+      if (el) el.parentNode.removeChild(el);
+    }
 
-    if (points.length === 0) {
-      document.getElementById('map').innerHTML = '<div id="no-data">データがありません</div>';
-    } else {
+    function buildMap(points) {
+      if (points.length === 0) {
+        hideLoading();
+        document.getElementById('map').innerHTML = '<div id="no-data">データがありません</div>';
+        return;
+      }
+
       var last = points[points.length - 1];
       // GASウェブアプリはviewportを980pxに固定するため window.innerWidth が常に980を返す。
       // そのためCSSの @media (max-width:768px) も機能しない。
@@ -79,7 +114,7 @@
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(map);
+      }).once('load', hideLoading).addTo(map);
 
       function formatDatetime(iso) {
         if (!iso) return '';
@@ -203,6 +238,13 @@
       });
       map.addControl(new ModeControl());
     }
+
+    // doGet() がHTMLのみ即返却するため、データはここで非同期取得する。
+    // withFailureHandler でエラー時もスピナーを消してフリーズを防ぐ。
+    google.script.run
+      .withSuccessHandler(buildMap)
+      .withFailureHandler(hideLoading)
+      .getPoints();
   </script>
 </body>
 </html>
