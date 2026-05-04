@@ -248,8 +248,13 @@ function doGet(e) {
     if (latestData.records && latestData.records.length > 0) {
       const latestCreated = latestData.records[0]['作成日時'] && latestData.records[0]['作成日時'].value;
       if (latestCreated) {
-        const cutoff = new Date(new Date(latestCreated).getTime() - 7 * 24 * 60 * 60 * 1000);
-        const cutoffStr = Utilities.formatDate(cutoff, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+        // 最新レコードのJST日付を取得し、7日前の0時0分(JST)をカットオフにする
+        const latestJSTDate = Utilities.formatDate(new Date(latestCreated), 'Asia/Tokyo', 'yyyy-MM-dd');
+        const parts = latestJSTDate.split('-');
+        const cutoffMidnightJST = new Date(Date.UTC(
+          parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]) - 6
+        ) - 9 * 60 * 60 * 1000);
+        const cutoffStr = Utilities.formatDate(cutoffMidnightJST, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
         queryFilter = '作成日時 >= "' + cutoffStr + '"';
       }
     }
