@@ -66,6 +66,8 @@
         var color;
         if (p.name) {
           color = 'OrangeRed';
+        } else if (p.isOld) {
+          color = 'gray';
         } else {
           var t = 0;
           if (p.datetime) {

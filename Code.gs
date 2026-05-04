@@ -235,76 +235,67 @@ function doGet(e) {
   let points = [];
 
   try {
-    // 作成日時で最新レコードを取得して7日分のカットオフを計算
-    let queryFilter = '';
+    // 最新作成日時を取得
     const latestUrl = 'https://' + domain + '/k/v1/records.json?app=' + appId
       + '&query=' + encodeURIComponent('order by 作成日時 desc limit 1')
       + '&fields[0]=作成日時';
     const latestData = JSON.parse(UrlFetchApp.fetch(latestUrl, {
-      method: 'get',
-      headers: { 'X-Cybozu-API-Token': apiToken },
-      muteHttpExceptions: true
+      method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true
     }).getContentText());
-    if (latestData.records && latestData.records.length > 0) {
-      const latestCreated = latestData.records[0]['作成日時'] && latestData.records[0]['作成日時'].value;
-      if (latestCreated) {
-        // 最新レコードのJST日付を取得し、7日前の0時0分(JST)をカットオフにする
-        const latestJSTDate = Utilities.formatDate(new Date(latestCreated), 'Asia/Tokyo', 'yyyy-MM-dd');
-        const parts = latestJSTDate.split('-');
-        const cutoffMidnightJST = new Date(Date.UTC(
-          parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]) - 6
-        ) - 9 * 60 * 60 * 1000);
-        const cutoffStr = Utilities.formatDate(cutoffMidnightJST, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
-        queryFilter = '作成日時 >= "' + cutoffStr + '"';
-      }
+
+    if (!latestData.records || latestData.records.length === 0) throw new Error('No records');
+    const latestCreated = latestData.records[0]['作成日時'].value;
+
+    // JST日付から各カットオフを計算
+    const latestJSTDate = Utilities.formatDate(new Date(latestCreated), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const p = latestJSTDate.split('-');
+    const y = parseInt(p[0]), mo = parseInt(p[1]) - 1, d = parseInt(p[2]);
+
+    function jstMidnight(daysBack) {
+      return new Date(Date.UTC(y, mo, d - daysBack) - 9 * 60 * 60 * 1000);
     }
 
-    // Step1: GPSレコード取得（最新レコードから7日分、新しい順に500件取得後に反転）
-    const condition = queryFilter ? queryFilter + ' ' : '';
-    const query = encodeURIComponent(condition + 'order by 作成日時 desc limit 500');
-    const url = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + query;
+    const cutoff27 = jstMidnight(27);
+    const cutoff6  = jstMidnight(6);
+    const cutoff27Str = Utilities.formatDate(cutoff27, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
 
-    const response = UrlFetchApp.fetch(url, {
-      method: 'get',
-      headers: { 'X-Cybozu-API-Token': apiToken },
-      muteHttpExceptions: true
+    // Step1: GPSレコード取得（27日前0時以降、新しい順に500件取得後に反転）
+    const gpsQuery = encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by 作成日時 desc limit 500');
+    const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY, '作成日時']
+      .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
+    const gpsData = JSON.parse(UrlFetchApp.fetch(
+      'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + gpsQuery + '&' + gpsFields,
+      { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true }
+    ).getContentText());
+
+    (gpsData.records || []).reverse().forEach(function(record) {
+      const latVal = record[fieldLat] && record[fieldLat].value;
+      const lngVal = record[fieldLng] && record[fieldLng].value;
+      if (latVal === '' || latVal == null || lngVal === '' || lngVal == null) return;
+      const lat = parseFloat(latVal);
+      const lng = parseFloat(lngVal);
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
+      const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
+      const createdVal = record['作成日時'] && record['作成日時'].value;
+      const isOld = createdVal ? new Date(createdVal) < cutoff6 : true;
+
+      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', isOld: isOld });
     });
 
-    const data = JSON.parse(response.getContentText());
-
-    if (data.records) {
-      data.records.forEach(function(record) {
-        const latVal = record[fieldLat] && record[fieldLat].value;
-        const lngVal = record[fieldLng] && record[fieldLng].value;
-        const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
-        const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
-
-        if (latVal === '' || latVal == null || lngVal === '' || lngVal == null) return;
-
-        const lat = parseFloat(latVal);
-        const lng = parseFloat(lngVal);
-        if (isNaN(lat) || isNaN(lng)) return;
-
-        points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '' });
-      });
-      points.reverse();
-    }
-
-    // Step2: 道の駅訪問履歴を全件取得してメモリ上でマッチング
+    // Step2: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
     if (apiTokenRekishi) {
       const rekishiUrl = 'https://' + domain + '/k/v1/records.json'
         + '?app=17'
-        + '&query=' + encodeURIComponent('order by ' + FIELD_KEY + ' asc limit 500')
+        + '&query=' + encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by ' + FIELD_KEY + ' asc limit 500')
         + '&fields[0]=' + encodeURIComponent(FIELD_KEY)
         + '&fields[1]=name';
 
-      const rekishiResponse = UrlFetchApp.fetch(rekishiUrl, {
-        method: 'get',
-        headers: { 'X-Cybozu-API-Token': apiTokenRekishi },
-        muteHttpExceptions: true
-      });
+      const rekishiData = JSON.parse(UrlFetchApp.fetch(rekishiUrl, {
+        method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenRekishi }, muteHttpExceptions: true
+      }).getContentText());
 
-      const rekishiData = JSON.parse(rekishiResponse.getContentText());
       const nameMap = {};
       if (rekishiData.records) {
         rekishiData.records.forEach(function(record) {
@@ -315,9 +306,7 @@ function doGet(e) {
       }
 
       // Step3: GPSレコードにname付加
-      points.forEach(function(p) {
-        p.name = nameMap[p.key] || '';
-      });
+      points.forEach(function(p) { p.name = nameMap[p.key] || ''; });
     }
   } catch (err) {
     Logger.log(err);
