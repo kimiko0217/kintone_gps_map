@@ -17,10 +17,38 @@
       font-size: 1.5rem;
       color: #666;
     }
+    #mode-btns {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      display: flex;
+      gap: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    #mode-btns button {
+      padding: 8px 12px;
+      background: white;
+      border: 1px solid #999;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #mode-btns button:first-child { border-radius: 4px 0 0 4px; }
+    #mode-btns button:last-child  { border-radius: 0 4px 4px 0; }
+    #mode-btns button.active {
+      background: #1a6fcc;
+      color: white;
+      border-color: #1a6fcc;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="mode-btns">
+    <button data-mode="0" class="active">当日のみ</button>
+    <button data-mode="1">1週間</button>
+    <button data-mode="2">4週間</button>
+  </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     var points = <?!= pointsJson ?>;
@@ -52,41 +80,38 @@
       }
 
       var now = new Date();
+      var layerToday = L.layerGroup();
+      var layerWeek  = L.layerGroup();
+      var layerAll   = L.layerGroup();
 
-      points.forEach(function(p, i) {
-        var color;
-        if (p.name) {
-          color = 'OrangeRed';
-        } else {
-          // 日単位グラデーション: Grey(#808080)→blue(#1a6fcc)、3日で完全グレー
-          var tDay = Math.max(0, 1 - p.daysAgo / 3);
-          var r = Math.round(0x80 + (0x1a - 0x80) * tDay);
-          var g = Math.round(0x80 + (0x6f - 0x80) * tDay);
-          var b = Math.round(0x80 + (0xcc - 0x80) * tDay);
-
-          // 時間グラデーション: 現在時刻からの経過分で色を決定（180分以降は日単位色）
-          if (p.datetime) {
-            var ageMin = (now - new Date(p.datetime)) / 60000;
-            if (ageMin >= 0 && ageMin < 180) {
-              var red    = [0xcc, 0x1a, 0x1a];
-              var yellow = [0xcc, 0xcc, 0x00];
-              var green  = [0x1a, 0xcc, 0x1a];
-              var day    = [r, g, b];
-              var seg, c1, c2;
-              if      (ageMin < 30)  { c1 = red;    c2 = red;    seg = 0; }
-              else if (ageMin < 60)  { c1 = red;    c2 = yellow; seg = (ageMin - 30) / 30; }
-              else if (ageMin < 90)  { c1 = yellow; c2 = yellow; seg = 0; }
-              else if (ageMin < 120) { c1 = yellow; c2 = green;  seg = (ageMin - 90) / 30; }
-              else if (ageMin < 150) { c1 = green;  c2 = green;  seg = 0; }
-              else                   { c1 = green;  c2 = day;    seg = (ageMin - 150) / 30; }
-              r = Math.round(c1[0] + (c2[0] - c1[0]) * seg);
-              g = Math.round(c1[1] + (c2[1] - c1[1]) * seg);
-              b = Math.round(c1[2] + (c2[2] - c1[2]) * seg);
-            }
+      function makeColor(p) {
+        var tDay = Math.max(0, 1 - p.daysAgo / 3);
+        var r = Math.round(0x80 + (0x1a - 0x80) * tDay);
+        var g = Math.round(0x80 + (0x6f - 0x80) * tDay);
+        var b = Math.round(0x80 + (0xcc - 0x80) * tDay);
+        if (p.datetime) {
+          var ageMin = (now - new Date(p.datetime)) / 60000;
+          if (ageMin >= 0 && ageMin < 180) {
+            var red    = [0xcc, 0x1a, 0x1a];
+            var yellow = [0xcc, 0xcc, 0x00];
+            var green  = [0x1a, 0xcc, 0x1a];
+            var day    = [r, g, b];
+            var seg, c1, c2;
+            if      (ageMin < 30)  { c1 = red;    c2 = red;    seg = 0; }
+            else if (ageMin < 60)  { c1 = red;    c2 = yellow; seg = (ageMin - 30) / 30; }
+            else if (ageMin < 90)  { c1 = yellow; c2 = yellow; seg = 0; }
+            else if (ageMin < 120) { c1 = yellow; c2 = green;  seg = (ageMin - 90) / 30; }
+            else if (ageMin < 150) { c1 = green;  c2 = green;  seg = 0; }
+            else                   { c1 = green;  c2 = day;    seg = (ageMin - 150) / 30; }
+            r = Math.round(c1[0] + (c2[0] - c1[0]) * seg);
+            g = Math.round(c1[1] + (c2[1] - c1[1]) * seg);
+            b = Math.round(c1[2] + (c2[2] - c1[2]) * seg);
           }
-          color = 'rgb(' + r + ',' + g + ',' + b + ')';
         }
+        return 'rgb(' + r + ',' + g + ',' + b + ')';
+      }
 
+      points.forEach(function(p) {
         var marker;
         if (p.name) {
           marker = L.marker([p.lat, p.lng], {
@@ -96,14 +121,15 @@
               iconAnchor: [8, 8],
               popupAnchor: [0, -8]
             })
-          }).addTo(map);
+          });
         } else {
+          var color = makeColor(p);
           marker = L.circleMarker([p.lat, p.lng], {
             radius: 6,
             color: color,
             fillColor: color,
             fillOpacity: 0.8
-          }).addTo(map);
+          });
         }
 
         var datetimeStr = p.datetime ? formatDatetime(p.datetime) : formatKey(p.key);
@@ -114,6 +140,25 @@
           popupLines.push('<a href="https://www.google.com/maps/search/?api=1&query=道の駅+' + encodeURIComponent(p.name) + '" target="_blank">Googleマップで見る</a>');
         }
         marker.bindPopup(popupLines.join('<br>'));
+
+        layerAll.addLayer(marker);
+        if (p.daysAgo <= 6) layerWeek.addLayer(marker);
+        if (p.daysAgo === 0) layerToday.addLayer(marker);
+      });
+
+      var layers = [layerToday, layerWeek, layerAll];
+      var currentMode = 0;
+      layers[currentMode].addTo(map);
+
+      document.querySelectorAll('#mode-btns button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          map.removeLayer(layers[currentMode]);
+          currentMode = parseInt(this.dataset.mode);
+          layers[currentMode].addTo(map);
+          document.querySelectorAll('#mode-btns button').forEach(function(b) {
+            b.classList.toggle('active', parseInt(b.dataset.mode) === currentMode);
+          });
+        });
       });
     }
   </script>
