@@ -51,30 +51,30 @@
         return key.slice(0,4) + '/' + key.slice(4,6) + '/' + key.slice(6,8) + ' ' + key.slice(8,10) + ':' + key.slice(10,12);
       }
 
-      function lerpColor(t) {
-        const from = { r: 0x1a, g: 0x6f, b: 0xcc };
-        const to   = { r: 0xcc, g: 0x1a, b: 0x1a };
-        const r = Math.round(from.r + (to.r - from.r) * t);
-        const g = Math.round(from.g + (to.g - from.g) * t);
-        const b = Math.round(from.b + (to.b - from.b) * t);
-        return 'rgb(' + r + ',' + g + ',' + b + ')';
-      }
-
       var now = new Date();
 
       points.forEach(function(p, i) {
         var color;
         if (p.name) {
           color = 'OrangeRed';
-        } else if (p.isOld) {
-          color = 'gray';
         } else {
-          var t = 0;
+          // 日単位グラデーション: Grey(#808080)→blue(#1a6fcc)、3日で完全グレー
+          var tDay = Math.max(0, 1 - p.daysAgo / 3);
+          var r = Math.round(0x80 + (0x1a - 0x80) * tDay);
+          var g = Math.round(0x80 + (0x6f - 0x80) * tDay);
+          var b = Math.round(0x80 + (0xcc - 0x80) * tDay);
+
+          // 時間グラデーション: 現在時刻から60分以内は赤(#cc1a1a)にブレンド
           if (p.datetime) {
             var ageMin = (now - new Date(p.datetime)) / 60000;
-            t = Math.min(1, Math.max(0, (60 - ageMin) / 55));
+            if (ageMin >= 0 && ageMin < 60) {
+              var tHour = 1 - ageMin / 60;
+              r = Math.round(r + (0xcc - r) * tHour);
+              g = Math.round(g + (0x1a - g) * tHour);
+              b = Math.round(b + (0x1a - b) * tHour);
+            }
           }
-          color = lerpColor(t);
+          color = 'rgb(' + r + ',' + g + ',' + b + ')';
         }
 
         var marker = L.circleMarker([p.lat, p.lng], {

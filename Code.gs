@@ -273,7 +273,7 @@ function debugCount() {
 }
 
 function doGet(e) {
-  const CACHE_KEY = 'gps_map_points_v7';
+  const CACHE_KEY = 'gps_map_points_v8';
   const CACHE_TTL = 300; // 5分
 
   // キャッシュヒット時は即返す
@@ -319,8 +319,9 @@ function doGet(e) {
     }
 
     const cutoff27 = jstMidnight(27);
-    const cutoff6  = jstMidnight(6);
     const cutoff27Str = Utilities.formatDate(cutoff27, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+    // 最新日のJST日付（daysAgo計算の基準）
+    const latestDateMs = new Date(latestJSTDate).getTime();
 
     // Step1: GPSレコード取得（27日前0時以降、最大4ページを並列取得）
     // offsetはkintoneクエリ文字列に含める必要がある（URLパラメータ不可）
@@ -342,7 +343,6 @@ function doGet(e) {
     });
     // ページは昇順で返るため追加ソート不要
 
-    let cntOld = 0, cntNew = 0;
     allGpsRecords.forEach(function(record) {
       const latVal = record[fieldLat] && record[fieldLat].value;
       const lngVal = record[fieldLng] && record[fieldLng].value;
@@ -354,12 +354,14 @@ function doGet(e) {
       const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
       const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
       const createdVal = record['作成日時'] && record['作成日時'].value;
-      const isOld = createdVal ? new Date(createdVal) < cutoff6 : true;
+      let daysAgo = 27;
+      if (createdVal) {
+        const createdJSTDate = Utilities.formatDate(new Date(createdVal), 'Asia/Tokyo', 'yyyy-MM-dd');
+        daysAgo = Math.round((latestDateMs - new Date(createdJSTDate).getTime()) / 86400000);
+      }
 
-      if (isOld) cntOld++; else cntNew++;
-      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', isOld: isOld });
+      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', daysAgo: daysAgo });
     });
-    Logger.log('points: isOld=%s isNew=%s cutoff6=%s', cntOld, cntNew, cutoff6.toISOString());
 
     // Step2: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
     if (apiTokenRekishi) {
