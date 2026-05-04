@@ -20,7 +20,8 @@
       font-size: 1.5rem;
       color: #666;
     }
-    .mode-ctrl { display: flex; }
+    .mode-ctrl { display: flex; flex-direction: column; }
+    .mode-ctrl-buttons { display: flex; }
     .mode-ctrl button {
       padding: 0 12px;
       height: 36px;
@@ -47,6 +48,16 @@
         min-width: 132px;
         padding: 0 28px;
       }
+    }
+    .mode-ctrl-date {
+      background: white;
+      border: 1px solid #bbb;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      font-size: 11px;
+      color: #555;
+      padding: 3px 6px 4px;
+      text-align: center;
     }
     .leaflet-popup-content {
       font-size: 14px;
@@ -132,6 +143,11 @@
         return key.slice(0,4) + '/' + key.slice(4,6) + '/' + key.slice(6,8) + ' ' + key.slice(8,10) + ':' + key.slice(10,12);
       }
 
+      var latestIso = points.reduce(function(max, p) {
+        return p.datetime && p.datetime > max ? p.datetime : max;
+      }, '');
+      var latestDateStr = latestIso ? formatDatetime(latestIso).slice(0, 10) : '';
+
       var now = new Date();
       var layerToday = L.layerGroup();
       var layerWeek  = L.layerGroup();
@@ -208,27 +224,39 @@
         options: { position: 'topright' },
         onAdd: function() {
           var div = L.DomUtil.create('div', 'mode-ctrl');
-          div.innerHTML =
+
+          var btnRow = L.DomUtil.create('div', 'mode-ctrl-buttons', div);
+          btnRow.innerHTML =
             '<button data-mode="0" class="active">直近1日</button>' +
             '<button data-mode="1">直近1週</button>' +
             '<button data-mode="2">直近4週</button>';
+
+          if (latestDateStr) {
+            var dateDiv = L.DomUtil.create('div', 'mode-ctrl-date', div);
+            dateDiv.textContent = '最終記録日: ' + latestDateStr;
+            if (isMobile) {
+              dateDiv.style.fontSize = '28px';
+              dateDiv.style.padding = '8px 12px';
+            }
+          }
+
           L.DomEvent.disableClickPropagation(div);
           // CSSの @media クエリがGASのviewport固定(980px)により機能しないため、
           // JavaScriptで直接インラインスタイルを設定してスマホ用サイズを適用する。
           if (isMobile) {
-            div.querySelectorAll('button').forEach(function(btn) {
+            btnRow.querySelectorAll('button').forEach(function(btn) {
               btn.style.height = 'auto';
               btn.style.fontSize = '45px';
               btn.style.minWidth = '0';
               btn.style.padding = '24px';
             });
           }
-          div.querySelectorAll('button').forEach(function(btn) {
+          btnRow.querySelectorAll('button').forEach(function(btn) {
             L.DomEvent.on(btn, 'click', function() {
               map.removeLayer(layers[currentMode]);
               currentMode = parseInt(btn.dataset.mode);
               layers[currentMode].addTo(map);
-              div.querySelectorAll('button').forEach(function(b) {
+              btnRow.querySelectorAll('button').forEach(function(b) {
                 b.classList.toggle('active', parseInt(b.dataset.mode) === currentMode);
               });
             });
