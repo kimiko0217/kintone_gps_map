@@ -42,10 +42,10 @@
     }
     @media (max-width: 768px) {
       .mode-ctrl button {
-        height: 44px;
-        font-size: 15px;
-        min-width: 66px;
-        padding: 0 14px;
+        height: 88px;
+        font-size: 30px;
+        min-width: 132px;
+        padding: 0 28px;
       }
     }
     .leaflet-popup-content {
@@ -67,10 +67,10 @@
       var last = points[points.length - 1];
       var isMobile = window.screen.width <= 768;
       var initialZoom  = isMobile ? 17 : 15;
-      var markerRadius = isMobile ? 24 : 9;
-      var iconSize     = isMobile ? 64 : 24;
-      var iconAnchor   = isMobile ? 32 : 12;
-      var popupAnchor  = isMobile ? -32 : -12;
+      var markerRadius = isMobile ? 18 : 7;
+      var iconSize     = isMobile ? 48 : 18;
+      var iconAnchor   = isMobile ? 24 : 9;
+      var popupAnchor  = isMobile ? -24 : -9;
 
       var map = L.map('map').setView([last.lat, last.lng], initialZoom);
 
