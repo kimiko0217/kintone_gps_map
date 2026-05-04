@@ -74,10 +74,9 @@
 
       var map = L.map('map').setView([last.lat, last.lng], initialZoom);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', Object.assign(
-        { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' },
-        isMobile ? { tileSize: 512, zoomOffset: -1 } : {}
-      )).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
 
       function formatDatetime(iso) {
         if (!iso) return '';
