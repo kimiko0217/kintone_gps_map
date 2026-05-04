@@ -273,7 +273,7 @@ function debugCount() {
 }
 
 function doGet(e) {
-  const CACHE_KEY = 'gps_map_points_v8';
+  const CACHE_KEY = 'gps_map_points_v9';
   const CACHE_TTL = 300; // 5分
 
   // キャッシュヒット時は即返す
@@ -298,19 +298,19 @@ function doGet(e) {
   let points = [];
 
   try {
-    // 最新作成日時を取得
+    // 送信日時が入っている最新レコードを取得
     const latestUrl = 'https://' + domain + '/k/v1/records.json?app=' + appId
-      + '&query=' + encodeURIComponent('order by 作成日時 desc limit 1')
-      + '&fields[0]=作成日時';
+      + '&query=' + encodeURIComponent(fieldDatetime + ' != "" order by ' + fieldDatetime + ' desc limit 1')
+      + '&fields[0]=' + encodeURIComponent(fieldDatetime);
     const latestData = JSON.parse(UrlFetchApp.fetch(latestUrl, {
       method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true
     }).getContentText());
 
     if (!latestData.records || latestData.records.length === 0) throw new Error('No records');
-    const latestCreated = latestData.records[0]['作成日時'].value;
+    const latestDatetime = latestData.records[0][fieldDatetime].value;
 
     // JST日付から各カットオフを計算
-    const latestJSTDate = Utilities.formatDate(new Date(latestCreated), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const latestJSTDate = Utilities.formatDate(new Date(latestDatetime), 'Asia/Tokyo', 'yyyy-MM-dd');
     const p = latestJSTDate.split('-');
     const y = parseInt(p[0]), mo = parseInt(p[1]) - 1, d = parseInt(p[2]);
 
@@ -323,10 +323,10 @@ function doGet(e) {
     // 最新日のJST日付（daysAgo計算の基準）
     const latestDateMs = new Date(latestJSTDate).getTime();
 
-    // Step1: GPSレコード取得（27日前0時以降、最大4ページを並列取得）
+    // Step1: GPSレコード取得（送信日時あり・27日前0時以降、最大4ページを並列取得）
     // offsetはkintoneクエリ文字列に含める必要がある（URLパラメータ不可）
-    const gpsFilter = '作成日時 >= "' + cutoff27Str + '" order by 作成日時 asc limit 500';
-    const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY, '作成日時']
+    const gpsFilter = fieldDatetime + ' >= "' + cutoff27Str + '" and ' + fieldDatetime + ' != "" order by ' + fieldDatetime + ' asc limit 500';
+    const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY]
       .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
     const gpsApiBase = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&' + gpsFields;
     const fetchOptions = { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true };
@@ -353,11 +353,10 @@ function doGet(e) {
 
       const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
       const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
-      const createdVal = record['作成日時'] && record['作成日時'].value;
       let daysAgo = 27;
-      if (createdVal) {
-        const createdJSTDate = Utilities.formatDate(new Date(createdVal), 'Asia/Tokyo', 'yyyy-MM-dd');
-        daysAgo = Math.round((latestDateMs - new Date(createdJSTDate).getTime()) / 86400000);
+      if (datetimeVal) {
+        const dtJSTDate = Utilities.formatDate(new Date(datetimeVal), 'Asia/Tokyo', 'yyyy-MM-dd');
+        daysAgo = Math.round((latestDateMs - new Date(dtJSTDate).getTime()) / 86400000);
       }
 
       points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', daysAgo: daysAgo });
