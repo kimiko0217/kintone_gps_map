@@ -45,6 +45,58 @@ function debugKintone() {
   }
 }
 
+function debugDoGet() {
+  const props = PropertiesService.getScriptProperties();
+  const domain = props.getProperty('KINTONE_DOMAIN');
+  const appId = props.getProperty('APP_ID');
+  const apiToken = props.getProperty('API_TOKEN');
+  const apiTokenRekishi = props.getProperty('KINTONE_API_TOKEN_REKISHI');
+  const fieldLat = props.getProperty('FIELD_LAT');
+  const fieldLng = props.getProperty('FIELD_LNG');
+  const FIELD_KEY = '送信日時YYYYMMddHHmm';
+
+  // 最新作成日時を確認
+  const latestUrl = 'https://' + domain + '/k/v1/records.json?app=' + appId
+    + '&query=' + encodeURIComponent('order by 作成日時 desc limit 1')
+    + '&fields[0]=作成日時';
+  const latestData = JSON.parse(UrlFetchApp.fetch(latestUrl, {
+    method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true
+  }).getContentText());
+  const latestCreated = latestData.records && latestData.records[0] && latestData.records[0]['作成日時'].value;
+  Logger.log('最新作成日時: %s', latestCreated);
+
+  const cutoff = new Date(new Date(latestCreated).getTime() - 7 * 24 * 60 * 60 * 1000);
+  const cutoffStr = Utilities.formatDate(cutoff, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+  Logger.log('カットオフ: %s', cutoffStr);
+
+  // GPS取得
+  const query = encodeURIComponent('作成日時 >= "' + cutoffStr + '" order by 作成日時 desc limit 500');
+  const gpsData = JSON.parse(UrlFetchApp.fetch(
+    'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + query,
+    { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true }
+  ).getContentText());
+
+  const records = gpsData.records || [];
+  Logger.log('取得GPS件数: %s', records.length);
+
+  const keys = Array.from(new Set(records.map(function(r) {
+    return r[FIELD_KEY] && r[FIELD_KEY].value;
+  }).filter(function(k) { return k; })));
+  Logger.log('有効FIELD_KEY数: %s', keys.length);
+  Logger.log('FIELD_KEY一覧(最新10件): %s', keys.slice(-10).join(', '));
+
+  // app17照合
+  if (keys.length === 0) { Logger.log('FIELD_KEYなし → Step2スキップ'); return; }
+  const inValues = keys.map(function(k) { return '"' + k + '"'; }).join(',');
+  const rekishiQuery = encodeURIComponent(FIELD_KEY + ' in (' + inValues + ') limit 500');
+  const rekishiData = JSON.parse(UrlFetchApp.fetch(
+    'https://' + domain + '/k/v1/records.json?app=17&query=' + rekishiQuery + '&fields[0]=' + encodeURIComponent(FIELD_KEY) + '&fields[1]=name',
+    { method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenRekishi }, muteHttpExceptions: true }
+  ).getContentText());
+  Logger.log('app17一致件数: %s', (rekishiData.records || []).length);
+  if (rekishiData.message) Logger.log('app17エラー: %s', rekishiData.message);
+}
+
 function debugRekishi3() {
   const props = PropertiesService.getScriptProperties();
   const domain = props.getProperty('KINTONE_DOMAIN');
@@ -191,9 +243,9 @@ function doGet(e) {
       }
     }
 
-    // Step1: GPSレコード取得（最新レコードから7日分、作成日時順）
+    // Step1: GPSレコード取得（最新レコードから7日分、新しい順に500件取得後に反転）
     const condition = queryFilter ? queryFilter + ' ' : '';
-    const query = encodeURIComponent(condition + 'order by 作成日時 asc limit 500');
+    const query = encodeURIComponent(condition + 'order by 作成日時 desc limit 500');
     const url = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + query;
 
     const response = UrlFetchApp.fetch(url, {
@@ -219,18 +271,14 @@ function doGet(e) {
 
         points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '' });
       });
+      points.reverse();
     }
 
-    // Step2: 道の駅訪問履歴から施設名を取得
-    const keys = Array.from(new Set(points.map(function(p) { return p.key; }).filter(function(k) { return k !== ''; })));
-    if (keys.length > 0 && apiTokenRekishi) {
-      const inValues = keys.map(function(k) { return '"' + k + '"'; }).join(',');
-      const rekishiQuery = encodeURIComponent(
-        FIELD_KEY + ' in (' + inValues + ') order by ' + FIELD_KEY + ' asc limit 500'
-      );
+    // Step2: 道の駅訪問履歴を全件取得してメモリ上でマッチング
+    if (apiTokenRekishi) {
       const rekishiUrl = 'https://' + domain + '/k/v1/records.json'
         + '?app=17'
-        + '&query=' + rekishiQuery
+        + '&query=' + encodeURIComponent('order by ' + FIELD_KEY + ' asc limit 500')
         + '&fields[0]=' + encodeURIComponent(FIELD_KEY)
         + '&fields[1]=name';
 
