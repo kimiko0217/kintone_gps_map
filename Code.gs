@@ -59,8 +59,27 @@ function doGet(e) {
   let points = [];
 
   try {
-    // Step1: GPSレコード取得
-    const query = encodeURIComponent('order by ' + fieldDatetime + ' asc limit 500');
+    // 最新レコードのfieldDatetimeを取得して7日分のカットオフを計算
+    let queryFilter = '';
+    const latestUrl = 'https://' + domain + '/k/v1/records.json?app=' + appId
+      + '&query=' + encodeURIComponent('order by ' + fieldDatetime + ' desc limit 1')
+      + '&fields[0]=' + encodeURIComponent(fieldDatetime);
+    const latestData = JSON.parse(UrlFetchApp.fetch(latestUrl, {
+      method: 'get',
+      headers: { 'X-Cybozu-API-Token': apiToken },
+      muteHttpExceptions: true
+    }).getContentText());
+    if (latestData.records && latestData.records.length > 0) {
+      const latestDatetime = latestData.records[0][fieldDatetime] && latestData.records[0][fieldDatetime].value;
+      if (latestDatetime) {
+        const cutoff = new Date(new Date(latestDatetime).getTime() - 7 * 24 * 60 * 60 * 1000);
+        const cutoffStr = Utilities.formatDate(cutoff, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+        queryFilter = fieldDatetime + ' >= "' + cutoffStr + '" and ';
+      }
+    }
+
+    // Step1: GPSレコード取得（最新レコードから7日分）
+    const query = encodeURIComponent(queryFilter + 'order by ' + fieldDatetime + ' asc limit 500');
     const url = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + query;
 
     const response = UrlFetchApp.fetch(url, {
