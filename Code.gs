@@ -50,13 +50,16 @@ function doGet(e) {
   const domain = props.getProperty('KINTONE_DOMAIN');
   const appId = props.getProperty('APP_ID');
   const apiToken = props.getProperty('API_TOKEN');
+  const apiTokenRekishi = props.getProperty('KINTONE_API_TOKEN_REKISHI');
   const fieldLat = props.getProperty('FIELD_LAT');
   const fieldLng = props.getProperty('FIELD_LNG');
   const fieldDatetime = props.getProperty('FIELD_DATETIME');
+  const FIELD_KEY = '送信日時YYYYMMddHHmm';
 
   let points = [];
 
   try {
+    // Step1: GPSレコード取得
     const query = encodeURIComponent('order by ' + fieldDatetime + ' asc limit 500');
     const url = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + query;
 
@@ -73,6 +76,7 @@ function doGet(e) {
         const latVal = record[fieldLat] && record[fieldLat].value;
         const lngVal = record[fieldLng] && record[fieldLng].value;
         const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
+        const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
 
         if (latVal === '' || latVal == null || lngVal === '' || lngVal == null) return;
 
@@ -80,7 +84,42 @@ function doGet(e) {
         const lng = parseFloat(lngVal);
         if (isNaN(lat) || isNaN(lng)) return;
 
-        points.push({ lat: lat, lng: lng, datetime: datetimeVal || '' });
+        points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '' });
+      });
+    }
+
+    // Step2: 道の駅訪問履歴から施設名を取得
+    const keys = Array.from(new Set(points.map(function(p) { return p.key; }).filter(function(k) { return k !== ''; })));
+    if (keys.length > 0 && apiTokenRekishi) {
+      const inValues = keys.map(function(k) { return '"' + k + '"'; }).join(',');
+      const rekishiQuery = encodeURIComponent(
+        FIELD_KEY + ' in (' + inValues + ') order by ' + FIELD_KEY + ' asc limit 500'
+      );
+      const rekishiUrl = 'https://' + domain + '/k/v1/records.json'
+        + '?app=17'
+        + '&query=' + rekishiQuery
+        + '&fields[0]=' + encodeURIComponent(FIELD_KEY)
+        + '&fields[1]=name';
+
+      const rekishiResponse = UrlFetchApp.fetch(rekishiUrl, {
+        method: 'get',
+        headers: { 'X-Cybozu-API-Token': apiTokenRekishi },
+        muteHttpExceptions: true
+      });
+
+      const rekishiData = JSON.parse(rekishiResponse.getContentText());
+      const nameMap = {};
+      if (rekishiData.records) {
+        rekishiData.records.forEach(function(record) {
+          const k = record[FIELD_KEY] && record[FIELD_KEY].value;
+          const n = record['name'] && record['name'].value;
+          if (k) nameMap[k] = n || '';
+        });
+      }
+
+      // Step3: GPSレコードにname付加
+      points.forEach(function(p) {
+        p.name = nameMap[p.key] || '';
       });
     }
   } catch (err) {
