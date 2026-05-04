@@ -37,20 +37,18 @@
 
       function formatDatetime(iso) {
         if (!iso) return '';
-        var d = new Date(iso);
-        var y = d.getUTCFullYear();
-        var mo = ('0' + (d.getUTCMonth() + 1)).slice(-2);
-        var day = ('0' + d.getUTCDate()).slice(-2);
-        var h = ('0' + (d.getUTCHours() + 9)).slice(-2);
-        var mi = ('0' + d.getUTCMinutes()).slice(-2);
-        // 時が24を超える場合は日付を繰り上げ
-        var jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-        y = jst.getUTCFullYear();
-        mo = ('0' + (jst.getUTCMonth() + 1)).slice(-2);
-        day = ('0' + jst.getUTCDate()).slice(-2);
-        h = ('0' + jst.getUTCHours()).slice(-2);
-        mi = ('0' + jst.getUTCMinutes()).slice(-2);
-        return y + '/' + mo + '/' + day + ' ' + h + ':' + mi;
+        var jst = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
+        var y  = jst.getUTCFullYear();
+        var mo = ('0' + (jst.getUTCMonth() + 1)).slice(-2);
+        var d  = ('0' + jst.getUTCDate()).slice(-2);
+        var h  = ('0' + jst.getUTCHours()).slice(-2);
+        var mi = ('0' + jst.getUTCMinutes()).slice(-2);
+        return y + '/' + mo + '/' + d + ' ' + h + ':' + mi;
+      }
+
+      function formatKey(key) {
+        if (!key || key.length < 12) return '';
+        return key.slice(0,4) + '/' + key.slice(4,6) + '/' + key.slice(6,8) + ' ' + key.slice(8,10) + ':' + key.slice(10,12);
       }
 
       function lerpColor(t) {
@@ -84,15 +82,14 @@
           fillOpacity: 0.8
         }).addTo(map);
 
+        var datetimeStr = p.datetime ? formatDatetime(p.datetime) : formatKey(p.key);
         var popupLines = [];
-        if (p.datetime) popupLines.push(formatDatetime(p.datetime));
+        if (datetimeStr) popupLines.push(datetimeStr);
         if (p.name) {
           popupLines.push(p.name);
           popupLines.push('<a href="https://www.google.com/maps/search/?api=1&query=道の駅+' + encodeURIComponent(p.name) + '" target="_blank">Googleマップで見る</a>');
         }
-        if (popupLines.length > 0) {
-          marker.bindPopup(popupLines.join('<br>'));
-        }
+        marker.bindPopup(popupLines.join('<br>'));
       });
     }
   </script>
