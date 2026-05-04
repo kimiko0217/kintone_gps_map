@@ -26,6 +26,7 @@ function doGet(e) {
   const appId = props.getProperty('APP_ID');
   const apiToken = props.getProperty('API_TOKEN');
   const apiTokenMichinoekiRireki = props.getProperty('KINTONE_API_TOKEN_MICHINOEKI_RIREKI');
+  const appIdMichinoekiRireki = props.getProperty('KINTONE_APP_ID_MICHINOEKI_RIREKI');
   const appIdExclude = props.getProperty('KINTONE_APP_ID_EXCLUDE');
   const apiTokenExclude = props.getProperty('KINTONE_API_TOKEN_EXCLUDE');
   const fieldLat = props.getProperty('FIELD_LAT');
@@ -129,7 +130,7 @@ function doGet(e) {
     // Step3: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
     if (apiTokenMichinoekiRireki) {
       const rekishiUrl = 'https://' + domain + '/k/v1/records.json'
-        + '?app=17'
+        + '?app=' + appIdMichinoekiRireki
         + '&query=' + encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by ' + FIELD_KEY + ' asc limit 500')
         + '&fields[0]=' + encodeURIComponent(FIELD_KEY)
         + '&fields[1]=name';
