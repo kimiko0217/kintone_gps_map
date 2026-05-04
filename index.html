@@ -87,12 +87,24 @@
           color = 'rgb(' + r + ',' + g + ',' + b + ')';
         }
 
-        var marker = L.circleMarker([p.lat, p.lng], {
-          radius: 6,
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.8
-        }).addTo(map);
+        var marker;
+        if (p.name) {
+          marker = L.marker([p.lat, p.lng], {
+            icon: L.icon({
+              iconUrl: 'https://raw.githubusercontent.com/kimiko0217/kintone_gps_map/main/images/michinoeki.png',
+              iconSize: [16, 16],
+              iconAnchor: [8, 8],
+              popupAnchor: [0, -8]
+            })
+          }).addTo(map);
+        } else {
+          marker = L.circleMarker([p.lat, p.lng], {
+            radius: 6,
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.8
+          }).addTo(map);
+        }
 
         var datetimeStr = p.datetime ? formatDatetime(p.datetime) : formatKey(p.key);
         var popupLines = [];
