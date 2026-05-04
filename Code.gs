@@ -83,18 +83,29 @@ function debugDoGet() {
     return r[FIELD_KEY] && r[FIELD_KEY].value;
   }).filter(function(k) { return k; })));
   Logger.log('有効FIELD_KEY数: %s', keys.length);
-  Logger.log('FIELD_KEY一覧(最新10件): %s', keys.slice(-10).join(', '));
+  Logger.log('FIELD_KEY一覧(先頭10件=最新): %s', keys.slice(0, 10).join(', '));
+  Logger.log('FIELD_KEY一覧(末尾10件=最古): %s', keys.slice(-10).join(', '));
 
-  // app17照合
-  if (keys.length === 0) { Logger.log('FIELD_KEYなし → Step2スキップ'); return; }
-  const inValues = keys.map(function(k) { return '"' + k + '"'; }).join(',');
-  const rekishiQuery = encodeURIComponent(FIELD_KEY + ' in (' + inValues + ') limit 500');
+  // app17全件取得してメモリでマッチング
   const rekishiData = JSON.parse(UrlFetchApp.fetch(
-    'https://' + domain + '/k/v1/records.json?app=17&query=' + rekishiQuery + '&fields[0]=' + encodeURIComponent(FIELD_KEY) + '&fields[1]=name',
+    'https://' + domain + '/k/v1/records.json?app=17'
+      + '&query=' + encodeURIComponent('order by ' + FIELD_KEY + ' asc limit 500')
+      + '&fields[0]=' + encodeURIComponent(FIELD_KEY) + '&fields[1]=name',
     { method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenRekishi }, muteHttpExceptions: true }
   ).getContentText());
-  Logger.log('app17一致件数: %s', (rekishiData.records || []).length);
-  if (rekishiData.message) Logger.log('app17エラー: %s', rekishiData.message);
+  if (rekishiData.message) { Logger.log('app17エラー: %s', rekishiData.message); return; }
+
+  const nameMap = {};
+  (rekishiData.records || []).forEach(function(r) {
+    const k = r[FIELD_KEY] && r[FIELD_KEY].value;
+    if (k) nameMap[k] = r['name'] && r['name'].value;
+  });
+  Logger.log('app17 nameMap件数: %s', Object.keys(nameMap).length);
+
+  const keySet = new Set(keys);
+  const matched = Object.keys(nameMap).filter(function(k) { return keySet.has(k); });
+  Logger.log('GPS×app17 一致件数: %s', matched.length);
+  Logger.log('一致キー(先頭5件): %s', matched.slice(0, 5).join(', '));
 }
 
 function debugRekishi3() {
