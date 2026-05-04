@@ -209,9 +209,9 @@
         onAdd: function() {
           var div = L.DomUtil.create('div', 'mode-ctrl');
           div.innerHTML =
-            '<button data-mode="0" class="active">当日のみ</button>' +
-            '<button data-mode="1">1週間</button>' +
-            '<button data-mode="2">4週間</button>';
+            '<button data-mode="0" class="active">直近1日</button>' +
+            '<button data-mode="1">直近1週</button>' +
+            '<button data-mode="2">直近4週</button>';
           L.DomEvent.disableClickPropagation(div);
           // CSSの @media クエリがGASのviewport固定(980px)により機能しないため、
           // JavaScriptで直接インラインスタイルを設定してスマホ用サイズを適用する。
