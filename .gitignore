@@ -2,6 +2,9 @@
 .clasprc.json
 .clasp.json
 
+# 環境変数（APIトークン等）
+.env
+
 # Node
 node_modules/
 

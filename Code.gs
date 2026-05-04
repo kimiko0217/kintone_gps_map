@@ -221,8 +221,59 @@ function debugRekishi() {
   }
 }
 
+function debugCount() {
+  const props = PropertiesService.getScriptProperties();
+  const domain = props.getProperty('KINTONE_DOMAIN');
+  const appId = props.getProperty('APP_ID');
+  const apiToken = props.getProperty('API_TOKEN');
+
+  const latestData = JSON.parse(UrlFetchApp.fetch(
+    'https://' + domain + '/k/v1/records.json?app=' + appId
+      + '&query=' + encodeURIComponent('order by 作成日時 desc limit 1')
+      + '&fields[0]=作成日時',
+    { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true }
+  ).getContentText());
+
+  const latestCreated = latestData.records[0]['作成日時'].value;
+  const latestJSTDate = Utilities.formatDate(new Date(latestCreated), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const parts = latestJSTDate.split('-');
+  const cutoff27 = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]) - 27) - 9 * 60 * 60 * 1000);
+  const cutoff27Str = Utilities.formatDate(cutoff27, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+
+  Logger.log('最新作成日時: %s', latestCreated);
+  Logger.log('カットオフ(27日前): %s', cutoff27Str);
+
+  const countData = JSON.parse(UrlFetchApp.fetch(
+    'https://' + domain + '/k/v1/records.json?app=' + appId
+      + '&query=' + encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by 作成日時 asc limit 1')
+      + '&totalCount=true',
+    { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true }
+  ).getContentText());
+
+  Logger.log('27日間のGPS件数: %s', countData.totalCount);
+
+  // offsetをクエリ文字列に含める方式で各ページの件数を確認
+  const gpsFilter = '作成日時 >= "' + cutoff27Str + '" order by 作成日時 asc limit 500';
+  const gpsFields = 'fields[0]=' + encodeURIComponent('作成日時');
+  const gpsApiBase = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&' + gpsFields;
+  const requests = [0, 500, 1000].map(function(offset) {
+    return { url: gpsApiBase + '&query=' + encodeURIComponent(gpsFilter + ' offset ' + offset),
+      method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true };
+  });
+  UrlFetchApp.fetchAll(requests).forEach(function(response, i) {
+    const data = JSON.parse(response.getContentText());
+    const records = data.records || [];
+    Logger.log('offset=%s: %s件', i * 500, records.length);
+    if (records.length > 0) {
+      Logger.log('  最古: %s', records[0]['作成日時'].value);
+      Logger.log('  最新: %s', records[records.length - 1]['作成日時'].value);
+    }
+    if (data.message) Logger.log('エラー: %s', data.message);
+  });
+}
+
 function doGet(e) {
-  const CACHE_KEY = 'gps_map_points_v4';
+  const CACHE_KEY = 'gps_map_points_v7';
   const CACHE_TTL = 300; // 5分
 
   // キャッシュヒット時は即返す
@@ -272,25 +323,26 @@ function doGet(e) {
     const cutoff27Str = Utilities.formatDate(cutoff27, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
 
     // Step1: GPSレコード取得（27日前0時以降、最大4ページを並列取得）
-    const gpsQuery = encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by 作成日時 asc limit 500');
+    // offsetはkintoneクエリ文字列に含める必要がある（URLパラメータ不可）
+    const gpsFilter = '作成日時 >= "' + cutoff27Str + '" order by 作成日時 asc limit 500';
     const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY, '作成日時']
       .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
-    const gpsBaseUrl = 'https://' + domain + '/k/v1/records.json?app=' + appId
-      + '&query=' + gpsQuery + '&' + gpsFields;
+    const gpsApiBase = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&' + gpsFields;
     const fetchOptions = { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true };
 
     const requests = [0, 500, 1000, 1500].map(function(offset) {
-      return Object.assign({ url: gpsBaseUrl + '&offset=' + offset }, fetchOptions);
+      return Object.assign({
+        url: gpsApiBase + '&query=' + encodeURIComponent(gpsFilter + ' offset ' + offset)
+      }, fetchOptions);
     });
     const allGpsRecords = [];
     UrlFetchApp.fetchAll(requests).forEach(function(response) {
       const data = JSON.parse(response.getContentText());
       (data.records || []).forEach(function(r) { allGpsRecords.push(r); });
     });
-    allGpsRecords.sort(function(a, b) {
-      return a['作成日時'].value < b['作成日時'].value ? -1 : 1;
-    });
+    // ページは昇順で返るため追加ソート不要
 
+    let cntOld = 0, cntNew = 0;
     allGpsRecords.forEach(function(record) {
       const latVal = record[fieldLat] && record[fieldLat].value;
       const lngVal = record[fieldLng] && record[fieldLng].value;
@@ -304,8 +356,10 @@ function doGet(e) {
       const createdVal = record['作成日時'] && record['作成日時'].value;
       const isOld = createdVal ? new Date(createdVal) < cutoff6 : true;
 
+      if (isOld) cntOld++; else cntNew++;
       points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', isOld: isOld });
     });
+    Logger.log('points: isOld=%s isNew=%s cutoff6=%s', cntOld, cntNew, cutoff6.toISOString());
 
     // Step2: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
     if (apiTokenRekishi) {
