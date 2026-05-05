@@ -115,6 +115,11 @@
       // そのためCSSの @media (max-width:768px) も機能しない。
       // window.screen.width は端末の物理CSS幅を返すため、こちらでスマホ判定する。
       var isMobile = window.screen.width <= 768;
+      if (isMobile) {
+        var s = document.createElement('style');
+        s.textContent = '.leaflet-popup-content { font-size: 30px; }';
+        document.head.appendChild(s);
+      }
       var initialZoom  = isMobile ? 17 : 15;
       var markerRadius = isMobile ? 18 : 7;
       var iconSize     = isMobile ? 48 : 18;
