@@ -207,6 +207,8 @@
         if (p.name) {
           popupLines.push('道の駅 ' + p.name);
           popupLines.push('<a href="https://www.google.com/maps/search/?api=1&query=道の駅+' + encodeURIComponent(p.name) + '" target="_blank">Googleマップで見る</a>');
+        } else {
+          popupLines.push('<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank">Googleマップで見る</a>');
         }
         marker.bindPopup(popupLines.join('<br>'));
 
