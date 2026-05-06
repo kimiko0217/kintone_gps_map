@@ -64,6 +64,7 @@
       line-height: 1.6;
     }
     .leaflet-popup-content a { color: #1a6fcc; }
+    .mode-ctrl-view { margin-top: 4px; }
     #loading {
       position: fixed;
       top: 0; left: 0;
@@ -143,20 +144,20 @@
         return y + '/' + mo + '/' + d + ' ' + h + ':' + mi;
       }
 
-      function formatKey(key) {
-        if (!key || key.length < 12) return '';
-        return key.slice(0,4) + '/' + key.slice(4,6) + '/' + key.slice(6,8) + ' ' + key.slice(8,10) + ':' + key.slice(10,12);
-      }
-
       var latestIso = points.reduce(function(max, p) {
         return p.datetime && p.datetime > max ? p.datetime : max;
       }, '');
       var latestDateStr = latestIso ? formatDatetime(latestIso).slice(0, 10) : '';
 
       var now = new Date();
-      var layerToday = L.layerGroup();
-      var layerWeek  = L.layerGroup();
-      var layerAll   = L.layerGroup();
+      var gpsToday = L.layerGroup();
+      var gpsWeek  = L.layerGroup();
+      var gpsAll   = L.layerGroup();
+      var tmpToday = L.layerGroup();
+      var tmpWeek  = L.layerGroup();
+      var tmpAll   = L.layerGroup();
+      var currentView   = 'gps';
+      var currentPeriod = 0;
 
       function makeColor(p) {
         var tDay = Math.max(0, 1 - p.daysAgo / 3);
@@ -185,10 +186,29 @@
         return 'rgb(' + r + ',' + g + ',' + b + ')';
       }
 
+      function makeTempColor(temp) {
+        if (temp <= 15) {
+          // 白(0°C以下) → 青(15°C)
+          var t = Math.max(0, temp) / 15;
+          return 'rgb(' + Math.round(255 - 244 * t) + ',' + Math.round(255 - 244 * t) + ',' + Math.round(255 - 37 * t) + ')';
+        } else if (temp <= 35) {
+          // 青(15°C) → 赤(35°C)
+          var t = (temp - 15) / 20;
+          return 'hsl(' + Math.round(240 - 240 * t) + ',90%,45%)';
+        } else {
+          // 赤(35°C) → 紫(40°C)
+          var t = Math.min(1, (temp - 35) / 5);
+          return 'hsl(' + Math.round(360 - 60 * t) + ',90%,45%)';
+        }
+      }
+
       points.forEach(function(p) {
-        var marker;
+        var datetimeStr = p.datetime ? formatDatetime(p.datetime) : '';
+
+        // GPSマーカー
+        var gpsMarker;
         if (p.name) {
-          marker = L.marker([p.lat, p.lng], {
+          gpsMarker = L.marker([p.lat, p.lng], {
             icon: L.icon({
               iconUrl: 'https://raw.githubusercontent.com/kimiko0217/kintone_gps_map/main/images/michinoeki.png',
               iconSize: [iconSize, iconSize],
@@ -199,7 +219,7 @@
         } else if (p.star) {
           var starPx = isMobile ? 50 : 22;
           var starHalf = isMobile ? 25 : 11;
-          marker = L.marker([p.lat, p.lng], {
+          gpsMarker = L.marker([p.lat, p.lng], {
             icon: L.divIcon({
               html: '<div style="font-size:' + starPx + 'px;line-height:1;">⭐</div>',
               className: '',
@@ -210,45 +230,65 @@
           });
         } else {
           var color = makeColor(p);
-          marker = L.circleMarker([p.lat, p.lng], {
+          gpsMarker = L.circleMarker([p.lat, p.lng], {
             radius: markerRadius,
             color: color,
             fillColor: color,
             fillOpacity: 0.8
           });
         }
-
-        var datetimeStr = p.datetime ? formatDatetime(p.datetime) : formatKey(p.key);
-        var popupLines = [];
-        if (datetimeStr) popupLines.push(datetimeStr);
+        var gpsPopup = [];
+        if (datetimeStr) gpsPopup.push(datetimeStr);
         if (p.name) {
-          popupLines.push('道の駅 ' + p.name);
-          popupLines.push('<a href="https://www.google.com/maps/search/?api=1&query=道の駅+' + encodeURIComponent(p.name) + '" target="_blank">Googleマップで見る</a>');
+          gpsPopup.push('道の駅 ' + p.name);
+          gpsPopup.push('<a href="https://www.google.com/maps/search/?api=1&query=道の駅+' + encodeURIComponent(p.name) + '" target="_blank">Googleマップで見る</a>');
         } else {
-          popupLines.push('<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank">Googleマップで見る</a>');
+          gpsPopup.push('<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank">Googleマップで見る</a>');
         }
-        marker.bindPopup(popupLines.join('<br>'));
+        gpsMarker.bindPopup(gpsPopup.join('<br>'));
+        gpsAll.addLayer(gpsMarker);
+        if (p.daysAgo <= 6) gpsWeek.addLayer(gpsMarker);
+        if (p.daysAgo === 0) gpsToday.addLayer(gpsMarker);
 
-        layerAll.addLayer(marker);
-        if (p.daysAgo <= 6) layerWeek.addLayer(marker);
-        if (p.daysAgo === 0) layerToday.addLayer(marker);
+        // 温度マーカー
+        if (p.temp != null && !isNaN(p.temp)) {
+          var tColor = makeTempColor(p.temp);
+          var tmpMarker = L.circleMarker([p.lat, p.lng], {
+            radius: markerRadius,
+            color: tColor,
+            fillColor: tColor,
+            fillOpacity: 0.8
+          });
+          var tmpPopup = [];
+          if (datetimeStr) tmpPopup.push(datetimeStr);
+          tmpPopup.push(p.temp.toFixed(1) + '°C');
+          tmpPopup.push('<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank">Googleマップで見る</a>');
+          tmpMarker.bindPopup(tmpPopup.join('<br>'));
+          tmpAll.addLayer(tmpMarker);
+          if (p.daysAgo <= 6) tmpWeek.addLayer(tmpMarker);
+          if (p.daysAgo === 0) tmpToday.addLayer(tmpMarker);
+        }
       });
 
-      var layers = [layerToday, layerWeek, layerAll];
-      var currentMode = 0;
-      layers[currentMode].addTo(map);
+      var gpsLayers = [gpsToday, gpsWeek, gpsAll];
+      var tmpLayers = [tmpToday, tmpWeek, tmpAll];
+      gpsLayers[currentPeriod].addTo(map);
 
-      // Leafletコントロールとしてボタンを追加
       var ModeControl = L.Control.extend({
         options: { position: 'topright' },
         onAdd: function() {
           var div = L.DomUtil.create('div', 'mode-ctrl');
 
-          var btnRow = L.DomUtil.create('div', 'mode-ctrl-buttons', div);
-          btnRow.innerHTML =
+          var periodRow = L.DomUtil.create('div', 'mode-ctrl-buttons', div);
+          periodRow.innerHTML =
             '<button data-mode="0" class="active">直近1日</button>' +
             '<button data-mode="1">直近1週</button>' +
             '<button data-mode="2">直近4週</button>';
+
+          var viewRow = L.DomUtil.create('div', 'mode-ctrl-buttons mode-ctrl-view', div);
+          viewRow.innerHTML =
+            '<button data-view="gps" class="active">GPS</button>' +
+            '<button data-view="temp">温度</button>';
 
           if (latestDateStr) {
             var dateDiv = L.DomUtil.create('div', 'mode-ctrl-date', div);
@@ -263,23 +303,41 @@
           // CSSの @media クエリがGASのviewport固定(980px)により機能しないため、
           // JavaScriptで直接インラインスタイルを設定してスマホ用サイズを適用する。
           if (isMobile) {
-            btnRow.querySelectorAll('button').forEach(function(btn) {
-              btn.style.height = 'auto';
-              btn.style.fontSize = '45px';
-              btn.style.minWidth = '0';
-              btn.style.padding = '24px';
+            [periodRow, viewRow].forEach(function(row) {
+              row.querySelectorAll('button').forEach(function(btn) {
+                btn.style.height = 'auto';
+                btn.style.fontSize = '45px';
+                btn.style.minWidth = '0';
+                btn.style.padding = '24px';
+              });
             });
           }
-          btnRow.querySelectorAll('button').forEach(function(btn) {
+
+          periodRow.querySelectorAll('button').forEach(function(btn) {
             L.DomEvent.on(btn, 'click', function() {
-              map.removeLayer(layers[currentMode]);
-              currentMode = parseInt(btn.dataset.mode);
-              layers[currentMode].addTo(map);
-              btnRow.querySelectorAll('button').forEach(function(b) {
-                b.classList.toggle('active', parseInt(b.dataset.mode) === currentMode);
+              var activeLayers = currentView === 'gps' ? gpsLayers : tmpLayers;
+              map.removeLayer(activeLayers[currentPeriod]);
+              currentPeriod = parseInt(btn.dataset.mode);
+              activeLayers[currentPeriod].addTo(map);
+              periodRow.querySelectorAll('button').forEach(function(b) {
+                b.classList.toggle('active', parseInt(b.dataset.mode) === currentPeriod);
               });
             });
           });
+
+          viewRow.querySelectorAll('button').forEach(function(btn) {
+            L.DomEvent.on(btn, 'click', function() {
+              var oldLayers = currentView === 'gps' ? gpsLayers : tmpLayers;
+              map.removeLayer(oldLayers[currentPeriod]);
+              currentView = btn.dataset.view;
+              var newLayers = currentView === 'gps' ? gpsLayers : tmpLayers;
+              newLayers[currentPeriod].addTo(map);
+              viewRow.querySelectorAll('button').forEach(function(b) {
+                b.classList.toggle('active', b.dataset.view === currentView);
+              });
+            });
+          });
+
           return div;
         }
       });

@@ -18,7 +18,7 @@ function doGet(e) {
 }
 
 function getPoints() {
-  const CACHE_KEY = 'gps_map_points_v11';
+  const CACHE_KEY = 'gps_map_points_v12';
   const CACHE_TTL = 300; // 5分
 
   const cache = CacheService.getScriptCache();
@@ -43,6 +43,7 @@ function getPoints() {
   const fieldExcludeRadius   = props.getProperty('FIELD_EXCLUDE_RADIUS');
   const fieldExcludeName     = props.getProperty('FIELD_EXCLUDE_NAME');
   const fieldMichinoekiName  = props.getProperty('FIELD_MICHINOEKI_NAME');
+  const fieldTemp            = props.getProperty('FIELD_TEMP');
 
   let points = [];
 
@@ -73,7 +74,7 @@ function getPoints() {
 
     // Step1: GPSレコード取得（送信日時あり・27日前0時以降、最大4ページを並列取得）
     const gpsFilter = fieldDatetime + ' >= "' + cutoff27Str + '" and ' + fieldDatetime + ' != "" order by ' + fieldDatetime + ' asc limit 500';
-    const gpsFields = [fieldLat, fieldLng, fieldDatetime, fieldKey, fieldType]
+    const gpsFields = [fieldLat, fieldLng, fieldDatetime, fieldKey, fieldType, fieldTemp]
       .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
     const gpsApiBase = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&' + gpsFields;
     const fetchOptions = { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true };
@@ -100,13 +101,15 @@ function getPoints() {
       const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
       const keyVal = record[fieldKey] && record[fieldKey].value;
       const typeVal = record[fieldType] && record[fieldType].value;
+      const tempRaw = record[fieldTemp] && record[fieldTemp].value;
+      const tempVal = (tempRaw !== '' && tempRaw != null) ? parseFloat(tempRaw) : null;
       let daysAgo = 27;
       if (datetimeVal) {
         const dtJSTDate = Utilities.formatDate(new Date(datetimeVal), 'Asia/Tokyo', 'yyyy-MM-dd');
         daysAgo = Math.round((latestDateMs - new Date(dtJSTDate).getTime()) / 86400000);
       }
 
-      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', daysAgo: daysAgo, star: typeVal === '1' });
+      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', daysAgo: daysAgo, star: typeVal === '1', temp: tempVal });
     });
 
     // Step2: 除外エリアによるフィルタリング
