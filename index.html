@@ -295,6 +295,24 @@
         return marker;
       }
 
+      function showRangeLoading() {
+        var el = document.createElement('div');
+        el.id = 'range-loading';
+        el.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.75);z-index:9999;gap:16px;font-size:1.2rem;color:#666;';
+        var spinner = document.createElement('div');
+        spinner.className = 'loading-spinner';
+        el.appendChild(spinner);
+        var text = document.createElement('div');
+        text.textContent = '取得中...';
+        el.appendChild(text);
+        document.body.appendChild(el);
+      }
+
+      function hideRangeLoading() {
+        var el = document.getElementById('range-loading');
+        if (el) el.parentNode.removeChild(el);
+      }
+
       function buildRangeLayers(pts) {
         gpsRange.clearLayers();
         tmpRange.clearLayers();
@@ -408,8 +426,8 @@
             var fromStr = fromInput.value;
             var toStr = toInput.value;
             if (!fromStr || !toStr) return;
-            fetchBtn.textContent = '取得中...';
             fetchBtn.disabled = true;
+            showRangeLoading();
             google.script.run
               .withSuccessHandler(function(pts) {
                 buildRangeLayers(pts);
@@ -418,11 +436,11 @@
                   map.removeLayer(lrs[2]);
                   lrs[2].addTo(map);
                 }
-                fetchBtn.textContent = '取得';
+                hideRangeLoading();
                 fetchBtn.disabled = false;
               })
               .withFailureHandler(function() {
-                fetchBtn.textContent = '取得';
+                hideRangeLoading();
                 fetchBtn.disabled = false;
               })
               .getPointsByRange(fromStr, toStr);
