@@ -18,7 +18,7 @@ function doGet(e) {
 }
 
 function getPoints() {
-  const CACHE_KEY = 'gps_map_points_v13';
+  const CACHE_KEY = 'gps_map_points_v14';
   const CACHE_TTL = 300; // 5分
 
   const cache = CacheService.getScriptCache();
@@ -68,7 +68,7 @@ function getPoints() {
       return new Date(Date.UTC(y, mo, d - daysBack) - 9 * 60 * 60 * 1000);
     }
 
-    const cutoff6 = jstMidnight(6);
+    const cutoff6 = jstMidnight(9);
     const cutoff6Str = Utilities.formatDate(cutoff6, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
     const latestDateMs = new Date(latestJSTDate).getTime();
 

@@ -311,11 +311,11 @@
       points.forEach(function(p) {
         var dStr = p.datetime ? formatDatetime(p.datetime) : '';
         var gm = makeGpsMarker(p, dStr);
-        gpsWeek.addLayer(gm);
+        if (p.daysAgo <= 9) gpsWeek.addLayer(gm);
         if (p.daysAgo === 0) gpsToday.addLayer(gm);
         var tm = makeTmpMarker(p, dStr);
         if (tm) {
-          tmpWeek.addLayer(tm);
+          if (p.daysAgo <= 9) tmpWeek.addLayer(tm);
           if (p.daysAgo === 0) tmpToday.addLayer(tm);
         }
       });
@@ -330,7 +330,7 @@
           var periodRow = L.DomUtil.create('div', 'mode-ctrl-buttons', div);
           periodRow.innerHTML =
             '<button data-mode="0" class="active">直近1日</button>' +
-            '<button data-mode="1">直近1週</button>' +
+            '<button data-mode="1">直近10日</button>' +
             '<button data-mode="2">期間指定</button>';
 
           var rangeRow = L.DomUtil.create('div', 'mode-ctrl-range', div);
