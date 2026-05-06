@@ -33,9 +33,42 @@
       -webkit-tap-highlight-color: transparent;
       white-space: nowrap;
     }
-    .mode-ctrl button:not(:last-child) { border-right: none; }
-    .mode-ctrl button:first-child { border-radius: 4px 0 0 4px; }
-    .mode-ctrl button:last-child  { border-radius: 0 4px 4px 0; }
+    .mode-ctrl-buttons button:not(:last-child) { border-right: none; }
+    .mode-ctrl-buttons button:first-child { border-radius: 4px 0 0 4px; }
+    .mode-ctrl-buttons button:last-child  { border-radius: 0 4px 4px 0; }
+    .mode-ctrl-range {
+      display: none;
+      margin-top: 4px;
+      background: white;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      padding: 4px 8px;
+      align-items: center;
+      gap: 6px;
+      color: #555;
+      font-size: 12px;
+      flex-wrap: wrap;
+    }
+    .mode-ctrl-range.active { display: flex; }
+    .mode-ctrl-range input[type="date"] {
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      font-size: 13px;
+      padding: 2px 4px;
+      height: 28px;
+      width: 118px;
+      font-family: inherit;
+    }
+    .mode-ctrl-fetch {
+      border-radius: 4px;
+      height: 28px;
+      padding: 0 10px;
+      background: white;
+      border: 1px solid #bbb;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .mode-ctrl-fetch:disabled { color: #999; cursor: default; }
     .mode-ctrl button.active {
       background: #1a6fcc;
       color: white;
@@ -128,7 +161,6 @@
       var popupAnchor  = isMobile ? -24 : -9;
 
       var map = L.map('map').setView([last.lat, last.lng], initialZoom);
-
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).once('load', hideLoading).addTo(map);
@@ -152,10 +184,12 @@
       var now = new Date();
       var gpsToday = L.layerGroup();
       var gpsWeek  = L.layerGroup();
-      var gpsAll   = L.layerGroup();
+      var gpsRange = L.layerGroup();
       var tmpToday = L.layerGroup();
       var tmpWeek  = L.layerGroup();
-      var tmpAll   = L.layerGroup();
+      var tmpRange = L.layerGroup();
+      var gpsLayers = [gpsToday, gpsWeek, gpsRange];
+      var tmpLayers = [tmpToday, tmpWeek, tmpRange];
       var currentView   = 'gps';
       var currentPeriod = 0;
 
@@ -202,13 +236,10 @@
         }
       }
 
-      points.forEach(function(p) {
-        var datetimeStr = p.datetime ? formatDatetime(p.datetime) : '';
-
-        // GPSマーカー
-        var gpsMarker;
+      function makeGpsMarker(p, datetimeStr) {
+        var marker;
         if (p.name) {
-          gpsMarker = L.marker([p.lat, p.lng], {
+          marker = L.marker([p.lat, p.lng], {
             icon: L.icon({
               iconUrl: 'https://raw.githubusercontent.com/kimiko0217/kintone_gps_map/main/images/michinoeki.png',
               iconSize: [iconSize, iconSize],
@@ -219,7 +250,7 @@
         } else if (p.star) {
           var starPx = isMobile ? 50 : 22;
           var starHalf = isMobile ? 25 : 11;
-          gpsMarker = L.marker([p.lat, p.lng], {
+          marker = L.marker([p.lat, p.lng], {
             icon: L.divIcon({
               html: '<div style="font-size:' + starPx + 'px;line-height:1;">⭐</div>',
               className: '',
@@ -230,48 +261,65 @@
           });
         } else {
           var color = makeColor(p);
-          gpsMarker = L.circleMarker([p.lat, p.lng], {
+          marker = L.circleMarker([p.lat, p.lng], {
             radius: markerRadius,
             color: color,
             fillColor: color,
             fillOpacity: 0.8
           });
         }
-        var gpsPopup = [];
-        if (datetimeStr) gpsPopup.push(datetimeStr);
+        var popup = [];
+        if (datetimeStr) popup.push(datetimeStr);
         if (p.name) {
-          gpsPopup.push('道の駅 ' + p.name);
-          gpsPopup.push('<a href="https://www.google.com/maps/search/?api=1&query=道の駅+' + encodeURIComponent(p.name) + '" target="_blank">Googleマップで見る</a>');
+          popup.push('道の駅 ' + p.name);
+          popup.push('<a href="https://www.google.com/maps/search/?api=1&query=道の駅+' + encodeURIComponent(p.name) + '" target="_blank">Googleマップで見る</a>');
         } else {
-          gpsPopup.push('<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank">Googleマップで見る</a>');
+          popup.push('<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank">Googleマップで見る</a>');
         }
-        gpsMarker.bindPopup(gpsPopup.join('<br>'));
-        gpsAll.addLayer(gpsMarker);
-        if (p.daysAgo <= 6) gpsWeek.addLayer(gpsMarker);
-        if (p.daysAgo === 0) gpsToday.addLayer(gpsMarker);
+        marker.bindPopup(popup.join('<br>'));
+        return marker;
+      }
 
-        // 温度マーカー
-        if (p.temp != null && !isNaN(p.temp)) {
-          var tColor = makeTempColor(p.temp);
-          var tmpMarker = L.circleMarker([p.lat, p.lng], {
-            radius: markerRadius,
-            color: tColor,
-            fillColor: tColor,
-            fillOpacity: 0.8
-          });
-          var tmpPopup = [];
-          if (datetimeStr) tmpPopup.push(datetimeStr);
-          tmpPopup.push(p.temp.toFixed(1) + '°C');
-          tmpPopup.push('<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank">Googleマップで見る</a>');
-          tmpMarker.bindPopup(tmpPopup.join('<br>'));
-          tmpAll.addLayer(tmpMarker);
-          if (p.daysAgo <= 6) tmpWeek.addLayer(tmpMarker);
-          if (p.daysAgo === 0) tmpToday.addLayer(tmpMarker);
+      function makeTmpMarker(p, datetimeStr) {
+        if (p.temp == null || isNaN(p.temp)) return null;
+        var tColor = makeTempColor(p.temp);
+        var marker = L.circleMarker([p.lat, p.lng], {
+          radius: markerRadius,
+          color: tColor,
+          fillColor: tColor,
+          fillOpacity: 0.8
+        });
+        var popup = [];
+        if (datetimeStr) popup.push(datetimeStr);
+        popup.push(p.temp.toFixed(1) + '°C');
+        popup.push('<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank">Googleマップで見る</a>');
+        marker.bindPopup(popup.join('<br>'));
+        return marker;
+      }
+
+      function buildRangeLayers(pts) {
+        gpsRange.clearLayers();
+        tmpRange.clearLayers();
+        pts.forEach(function(p) {
+          var dStr = p.datetime ? formatDatetime(p.datetime) : '';
+          gpsRange.addLayer(makeGpsMarker(p, dStr));
+          var tm = makeTmpMarker(p, dStr);
+          if (tm) tmpRange.addLayer(tm);
+        });
+      }
+
+      points.forEach(function(p) {
+        var dStr = p.datetime ? formatDatetime(p.datetime) : '';
+        var gm = makeGpsMarker(p, dStr);
+        gpsWeek.addLayer(gm);
+        if (p.daysAgo === 0) gpsToday.addLayer(gm);
+        var tm = makeTmpMarker(p, dStr);
+        if (tm) {
+          tmpWeek.addLayer(tm);
+          if (p.daysAgo === 0) tmpToday.addLayer(tm);
         }
       });
 
-      var gpsLayers = [gpsToday, gpsWeek, gpsAll];
-      var tmpLayers = [tmpToday, tmpWeek, tmpAll];
       gpsLayers[currentPeriod].addTo(map);
 
       var ModeControl = L.Control.extend({
@@ -283,7 +331,22 @@
           periodRow.innerHTML =
             '<button data-mode="0" class="active">直近1日</button>' +
             '<button data-mode="1">直近1週</button>' +
-            '<button data-mode="2">直近4週</button>';
+            '<button data-mode="2">期間指定</button>';
+
+          var rangeRow = L.DomUtil.create('div', 'mode-ctrl-range', div);
+          var fromInput = document.createElement('input');
+          fromInput.type = 'date';
+          var sep = document.createElement('span');
+          sep.textContent = '〜';
+          var toInput = document.createElement('input');
+          toInput.type = 'date';
+          var fetchBtn = document.createElement('button');
+          fetchBtn.className = 'mode-ctrl-fetch';
+          fetchBtn.textContent = '取得';
+          rangeRow.appendChild(fromInput);
+          rangeRow.appendChild(sep);
+          rangeRow.appendChild(toInput);
+          rangeRow.appendChild(fetchBtn);
 
           var viewRow = L.DomUtil.create('div', 'mode-ctrl-buttons mode-ctrl-view', div);
           viewRow.innerHTML =
@@ -311,18 +374,54 @@
                 btn.style.padding = '24px';
               });
             });
+            [fromInput, toInput].forEach(function(input) {
+              input.style.fontSize = '32px';
+              input.style.height = '70px';
+              input.style.width = '240px';
+              input.style.padding = '8px';
+            });
+            fetchBtn.style.fontSize = '36px';
+            fetchBtn.style.height = '70px';
+            fetchBtn.style.padding = '0 20px';
+            sep.style.fontSize = '36px';
           }
 
           periodRow.querySelectorAll('button').forEach(function(btn) {
             L.DomEvent.on(btn, 'click', function() {
+              var mode = parseInt(btn.dataset.mode);
               var activeLayers = currentView === 'gps' ? gpsLayers : tmpLayers;
               map.removeLayer(activeLayers[currentPeriod]);
-              currentPeriod = parseInt(btn.dataset.mode);
+              currentPeriod = mode;
               activeLayers[currentPeriod].addTo(map);
               periodRow.querySelectorAll('button').forEach(function(b) {
                 b.classList.toggle('active', parseInt(b.dataset.mode) === currentPeriod);
               });
+              rangeRow.classList.toggle('active', currentPeriod === 2);
             });
+          });
+
+          L.DomEvent.on(fetchBtn, 'click', function() {
+            var fromStr = fromInput.value;
+            var toStr = toInput.value;
+            if (!fromStr || !toStr) return;
+            fetchBtn.textContent = '取得中...';
+            fetchBtn.disabled = true;
+            google.script.run
+              .withSuccessHandler(function(pts) {
+                buildRangeLayers(pts);
+                if (currentPeriod === 2) {
+                  var lrs = currentView === 'gps' ? gpsLayers : tmpLayers;
+                  map.removeLayer(lrs[2]);
+                  lrs[2].addTo(map);
+                }
+                fetchBtn.textContent = '取得';
+                fetchBtn.disabled = false;
+              })
+              .withFailureHandler(function() {
+                fetchBtn.textContent = '取得';
+                fetchBtn.disabled = false;
+              })
+              .getPointsByRange(fromStr, toStr);
           });
 
           viewRow.querySelectorAll('button').forEach(function(btn) {
