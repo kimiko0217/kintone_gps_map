@@ -85,8 +85,7 @@
     .mode-ctrl-date {
       background: white;
       border: 1px solid #bbb;
-      border-top: none;
-      border-radius: 0 0 4px 4px;
+      border-radius: 4px;
       font-size: 11px;
       color: #555;
       padding: 3px 6px 4px;
@@ -97,7 +96,6 @@
       line-height: 1.6;
     }
     .leaflet-popup-content a { color: #1a6fcc; }
-    .mode-ctrl-view { margin-top: 4px; }
     #loading {
       position: fixed;
       top: 0; left: 0;
@@ -327,12 +325,32 @@
         onAdd: function() {
           var div = L.DomUtil.create('div', 'mode-ctrl');
 
+          // ① 移動履歴/温度
+          var viewRow = L.DomUtil.create('div', 'mode-ctrl-buttons', div);
+          viewRow.innerHTML =
+            '<button data-view="gps" class="active">移動履歴</button>' +
+            '<button data-view="temp">温度</button>';
+
+          // ② 最終記録日
+          if (latestDateStr) {
+            var dateDiv = L.DomUtil.create('div', 'mode-ctrl-date', div);
+            dateDiv.textContent = '最終記録日: ' + latestDateStr;
+            dateDiv.style.marginTop = '4px';
+            if (isMobile) {
+              dateDiv.style.fontSize = '28px';
+              dateDiv.style.padding = '8px 12px';
+            }
+          }
+
+          // ③ 直近1日/直近10日/期間指定
           var periodRow = L.DomUtil.create('div', 'mode-ctrl-buttons', div);
+          periodRow.style.marginTop = '4px';
           periodRow.innerHTML =
             '<button data-mode="0" class="active">直近1日</button>' +
             '<button data-mode="1">直近10日</button>' +
             '<button data-mode="2">期間指定</button>';
 
+          // ④ 日付指定UI
           var rangeRow = L.DomUtil.create('div', 'mode-ctrl-range', div);
           var fromInput = document.createElement('input');
           fromInput.type = 'date';
@@ -347,20 +365,6 @@
           rangeRow.appendChild(sep);
           rangeRow.appendChild(toInput);
           rangeRow.appendChild(fetchBtn);
-
-          var viewRow = L.DomUtil.create('div', 'mode-ctrl-buttons mode-ctrl-view', div);
-          viewRow.innerHTML =
-            '<button data-view="gps" class="active">移動履歴</button>' +
-            '<button data-view="temp">温度</button>';
-
-          if (latestDateStr) {
-            var dateDiv = L.DomUtil.create('div', 'mode-ctrl-date', div);
-            dateDiv.textContent = '最終記録日: ' + latestDateStr;
-            if (isMobile) {
-              dateDiv.style.fontSize = '28px';
-              dateDiv.style.padding = '8px 12px';
-            }
-          }
 
           L.DomEvent.disableClickPropagation(div);
           // CSSの @media クエリがGASのviewport固定(980px)により機能しないため、
