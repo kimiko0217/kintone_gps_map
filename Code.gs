@@ -18,7 +18,7 @@ function doGet(e) {
 }
 
 function getPoints() {
-  const CACHE_KEY = 'gps_map_points_v10';
+  const CACHE_KEY = 'gps_map_points_v11';
   const CACHE_TTL = 300; // 5分
 
   const cache = CacheService.getScriptCache();
@@ -36,7 +36,13 @@ function getPoints() {
   const fieldLat = props.getProperty('FIELD_LAT');
   const fieldLng = props.getProperty('FIELD_LNG');
   const fieldDatetime = props.getProperty('FIELD_DATETIME');
-  const FIELD_KEY = '送信日時YYYYMMddHHmm';
+  const fieldKey             = props.getProperty('FIELD_KEY');
+  const fieldType            = props.getProperty('FIELD_TYPE');
+  const fieldExcludeLat      = props.getProperty('FIELD_EXCLUDE_LAT');
+  const fieldExcludeLng      = props.getProperty('FIELD_EXCLUDE_LON');
+  const fieldExcludeRadius   = props.getProperty('FIELD_EXCLUDE_RADIUS');
+  const fieldExcludeName     = props.getProperty('FIELD_EXCLUDE_NAME');
+  const fieldMichinoekiName  = props.getProperty('FIELD_MICHINOEKI_NAME');
 
   let points = [];
 
@@ -67,7 +73,7 @@ function getPoints() {
 
     // Step1: GPSレコード取得（送信日時あり・27日前0時以降、最大4ページを並列取得）
     const gpsFilter = fieldDatetime + ' >= "' + cutoff27Str + '" and ' + fieldDatetime + ' != "" order by ' + fieldDatetime + ' asc limit 500';
-    const gpsFields = [fieldLat, fieldLng, fieldDatetime, FIELD_KEY]
+    const gpsFields = [fieldLat, fieldLng, fieldDatetime, fieldKey, fieldType]
       .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
     const gpsApiBase = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&' + gpsFields;
     const fetchOptions = { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true };
@@ -92,21 +98,25 @@ function getPoints() {
       if (isNaN(lat) || isNaN(lng)) return;
 
       const datetimeVal = record[fieldDatetime] && record[fieldDatetime].value;
-      const keyVal = record[FIELD_KEY] && record[FIELD_KEY].value;
+      const keyVal = record[fieldKey] && record[fieldKey].value;
+      const typeVal = record[fieldType] && record[fieldType].value;
       let daysAgo = 27;
       if (datetimeVal) {
         const dtJSTDate = Utilities.formatDate(new Date(datetimeVal), 'Asia/Tokyo', 'yyyy-MM-dd');
         daysAgo = Math.round((latestDateMs - new Date(dtJSTDate).getTime()) / 86400000);
       }
 
-      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', daysAgo: daysAgo });
+      points.push({ lat: lat, lng: lng, datetime: datetimeVal || '', key: keyVal || '', name: '', daysAgo: daysAgo, star: typeVal === '1' });
     });
 
     // Step2: 除外エリアによるフィルタリング
     if (appIdExclude && apiTokenExclude) {
       const excludeUrl = 'https://' + domain + '/k/v1/records.json'
         + '?app=' + appIdExclude
-        + '&fields[0]=lat&fields[1]=lon&fields[2]=radius_m&fields[3]=name';
+        + '&fields[0]=' + encodeURIComponent(fieldExcludeLat)
+        + '&fields[1]=' + encodeURIComponent(fieldExcludeLng)
+        + '&fields[2]=' + encodeURIComponent(fieldExcludeRadius)
+        + '&fields[3]=' + encodeURIComponent(fieldExcludeName);
       const excludeData = JSON.parse(UrlFetchApp.fetch(excludeUrl, {
         method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenExclude }, muteHttpExceptions: true
       }).getContentText());
@@ -114,9 +124,9 @@ function getPoints() {
       if (excludeData.records && excludeData.records.length > 0) {
         const excludeZones = excludeData.records.map(function(r) {
           return {
-            lat: parseFloat(r['lat'] && r['lat'].value),
-            lon: parseFloat(r['lon'] && r['lon'].value),
-            radius_m: parseFloat(r['radius_m'] && r['radius_m'].value)
+            lat: parseFloat(r[fieldExcludeLat] && r[fieldExcludeLat].value),
+            lon: parseFloat(r[fieldExcludeLng] && r[fieldExcludeLng].value),
+            radius_m: parseFloat(r[fieldExcludeRadius] && r[fieldExcludeRadius].value)
           };
         }).filter(function(z) {
           return !isNaN(z.lat) && !isNaN(z.lon) && !isNaN(z.radius_m);
@@ -134,9 +144,9 @@ function getPoints() {
     if (apiTokenMichinoekiRireki) {
       const rekishiUrl = 'https://' + domain + '/k/v1/records.json'
         + '?app=' + appIdMichinoekiRireki
-        + '&query=' + encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by ' + FIELD_KEY + ' asc limit 500')
-        + '&fields[0]=' + encodeURIComponent(FIELD_KEY)
-        + '&fields[1]=name';
+        + '&query=' + encodeURIComponent('作成日時 >= "' + cutoff27Str + '" order by ' + fieldKey + ' asc limit 500')
+        + '&fields[0]=' + encodeURIComponent(fieldKey)
+        + '&fields[1]=' + encodeURIComponent(fieldMichinoekiName);
 
       const rekishiData = JSON.parse(UrlFetchApp.fetch(rekishiUrl, {
         method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenMichinoekiRireki }, muteHttpExceptions: true
@@ -145,8 +155,8 @@ function getPoints() {
       const nameMap = {};
       if (rekishiData.records) {
         rekishiData.records.forEach(function(record) {
-          const k = record[FIELD_KEY] && record[FIELD_KEY].value;
-          const n = record['name'] && record['name'].value;
+          const k = record[fieldKey] && record[fieldKey].value;
+          const n = record[fieldMichinoekiName] && record[fieldMichinoekiName].value;
           if (k) nameMap[k] = n || '';
         });
       }
