@@ -137,7 +137,9 @@ Lambda の「設定」→「環境変数」に以下を登録します。`lambda
 
 #### 4-2-1. 道の駅マスタ CSV の生成（初回のみ）
 
-`lambda/master/` のスクリプトを順番に実行してマスタ CSV を生成し、kintone にインポートします。
+1. 国交省の「[道の駅一覧](https://www.mlit.go.jp/road/Michi-no-Eki/list.html)」ページから Excel ファイルをダウンロードし、`lambda/master/mlit_list.xls` として保存する
+
+2. `lambda/master/` で以下を順番に実行する（P35・公式サイトからのデータ取得は自動）
 
 ```bash
 cd lambda/master
@@ -147,7 +149,7 @@ python fetch_coords.py       # 不足駅の緯度経度を補完 → diff_michin
 python build_master.py       # 統合してマスタ CSV を生成 → michinoeki_master.csv
 ```
 
-生成された `michinoeki_master.csv` を kintone 道の駅マスタアプリにインポートしてください。
+3. 生成された `michinoeki_master.csv` を kintone 道の駅マスタアプリにインポートする
 
 #### 4-3. kintone Webhook の設定
 
