@@ -45,7 +45,12 @@ GAS ウェブアプリ（このリポジトリ）── 地図に道の駅アイ
 │   └── michinoeki_icon.png  # 道の駅マーカーアイコン
 └── lambda/
     ├── lambda_function.py   # 道の駅訪問検出 Lambda 関数
-    └── .env.example         # Lambda 環境変数のテンプレート
+    ├── .env.example         # Lambda 環境変数のテンプレート
+    └── master/              # 道の駅マスタ CSV 構築スクリプト
+        ├── fetch_michinoeki.py  # 国土数値情報（P35）から道の駅データを取得
+        ├── fetch_diff.py        # 公式サイトから P35 にない駅を取得
+        ├── fetch_coords.py      # 不足駅の緯度経度を公式サイトから補完
+        └── build_master.py      # 上記3つの結果を統合してマスタ CSV を生成
 ```
 
 ## 前提条件
@@ -130,6 +135,20 @@ Lambda の「設定」→「環境変数」に以下を登録します。`lambda
 | `KINTONE_VISIT_API_TOKEN` | 道の駅訪問履歴アプリ API トークン |
 | `KINTONE_WEBHOOK_TOKEN` | kintone Webhook トークン（改ざん防止） |
 | `VISIT_RADIUS_M` | 訪問判定の半径メートル（デフォルト: 250） |
+
+#### 4-2-1. 道の駅マスタ CSV の生成（初回のみ）
+
+`lambda/master/` のスクリプトを順番に実行してマスタ CSV を生成し、kintone にインポートします。
+
+```bash
+cd lambda/master
+python fetch_michinoeki.py   # 国土数値情報（P35）から取得 → michinoeki.csv
+python fetch_diff.py         # 公式サイトから不足駅を取得 → diff_michinoeki.csv
+python fetch_coords.py       # 不足駅の緯度経度を補完 → diff_michinoeki.csv 更新
+python build_master.py       # 統合してマスタ CSV を生成 → michinoeki_master.csv
+```
+
+生成された `michinoeki_master.csv` を kintone 道の駅マスタアプリにインポートしてください。
 
 #### 4-3. kintone Webhook の設定
 
