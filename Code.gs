@@ -39,7 +39,9 @@ function haversine(lat1, lon1, lat2, lon2) {
 // ブラウザがHTMLを受け取った直後にスピナーを表示できる。
 // データはクライアントが google.script.run.getPoints() で非同期取得する。
 function doGet(e) {
-  return HtmlService.createHtmlOutputFromFile('index')
+  var tmpl = HtmlService.createTemplateFromFile('index');
+  tmpl.michinoekiIconUrl = PropertiesService.getScriptProperties().getProperty('MICHINOEKI_ICON_URL') || '';
+  return tmpl.evaluate()
     .setTitle('GPS Map')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }

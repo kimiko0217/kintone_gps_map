@@ -93,6 +93,7 @@ GAS エディタの「プロジェクトの設定」→「スクリプト プロ
 | `FIELD_KEY` | 送信日時 YYYYMMddHHmm フィールドコード |
 | `FIELD_TYPE` | 送信種別フィールドコード |
 | `FIELD_TEMP` | 温度フィールドコード |
+| `MICHINOEKI_ICON_URL` | 道の駅マーカーアイコンの画像 URL |
 | `KINTONE_APP_ID_MICHINOEKI_RIREKI` | 道の駅履歴アプリ ID（任意） |
 | `KINTONE_API_TOKEN_MICHINOEKI_RIREKI` | 道の駅履歴アプリ API トークン（任意） |
 | `FIELD_MICHINOEKI_NAME` | 道の駅名フィールドコード（任意） |

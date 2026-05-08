@@ -157,8 +157,7 @@
       var iconSize     = isMobile ? 48 : 18;
       var iconAnchor   = isMobile ? 24 : 9;
       var popupAnchor  = isMobile ? -24 : -9;
-      // フォークして使う場合は自分のリポジトリの URL に変更してください
-      var michinoekiIconUrl = 'https://raw.githubusercontent.com/kimiko0217/kintone_gps_map/main/images/michinoeki.png';
+      var michinoekiIconUrl = '<?= michinoekiIconUrl ?>';
 
       var map = L.map('map').setView([last.lat, last.lng], initialZoom);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
