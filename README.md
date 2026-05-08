@@ -172,4 +172,15 @@ python build_master.py       # 統合してマスタ CSV を生成 → michinoek
 
 - [Google Apps Script](https://developers.google.com/apps-script)
 - [Leaflet.js](https://leafletjs.com/)
-- [kintone REST API](https://cybozu.dev/ja/kintone/docs/rest-api/)
+- [kintone REST API / Webhook](https://cybozu.dev/ja/kintone/docs/rest-api/)
+- [AWS Lambda](https://aws.amazon.com/jp/lambda/)（Python 3.12）
+
+## データソース
+
+道の駅マスタの構築に以下を使用しています。
+
+- [国土数値情報 道の駅データ（P35）](https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-P35.html) — 国土交通省が公開するオープンデータ
+- [国土交通省 道の駅一覧](https://www.mlit.go.jp/road/Michi-no-Eki/list.html) — 登録駅の公式 Excel リスト
+- [michi-no-eki.jp](https://www.michi-no-eki.jp) — P35 に掲載のない駅の補完取得に使用
+
+> **注意:** `lambda/master/` のスクリプトはマスタ構築時点のデータ構造に合わせて作成しています。再実行時にはデータ構造の変更により、そのまま動作しない場合があります。
