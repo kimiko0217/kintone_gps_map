@@ -52,9 +52,11 @@ GAS ウェブアプリ（このリポジトリ）── 地図に道の駅アイ
 
 - kintone アカウントと以下のアプリ
   - GPS アプリ（緯度・経度・送信日時・送信種別・温度フィールドを含む）
-  - 道の駅履歴アプリ（任意）
+  - 道の駅マスタアプリ（任意・道の駅表示を使う場合）
+  - 道の駅訪問履歴アプリ（任意・道の駅表示を使う場合）
   - 除外エリアアプリ（任意）
 - Google アカウント（Google Apps Script 用）
+- AWS アカウント（道の駅表示を使う場合）
 - [clasp](https://github.com/google/clasp)（ローカルからのコード同期用）
 
 ## セットアップ
@@ -103,6 +105,37 @@ GAS エディタの「プロジェクトの設定」→「スクリプト プロ
 GAS エディタ右上「デプロイ」→「新しいデプロイ」→ 種別「ウェブアプリ」で公開します。
 
 > **注意:** `clasp deploy` は使用しないでください。デプロイ種別が変わり、ウェブアプリとして動作しなくなります。再デプロイ時は「デプロイを管理」→ 鉛筆アイコン →「新しいバージョン」→「デプロイ」の手順で行ってください。
+
+### 4. Lambda 関数のセットアップ（道の駅表示を使う場合のみ）
+
+#### 4-1. Lambda 関数の作成
+
+1. AWS コンソールで Lambda 関数を新規作成（ランタイム: Python 3.12）
+2. `lambda/lambda_function.py` を zip にまとめてアップロード
+   ```
+   zip lambda_deploy.zip lambda_function.py
+   ```
+3. ハンドラを `lambda_function.lambda_handler` に設定
+
+#### 4-2. 環境変数の設定
+
+Lambda の「設定」→「環境変数」に以下を登録します。`lambda/.env.example` を参考にしてください。
+
+| 環境変数名 | 内容 |
+|---|---|
+| `KINTONE_DOMAIN` | kintone ドメイン |
+| `KINTONE_MASTER_APP_ID` | 道の駅マスタアプリ ID |
+| `KINTONE_MASTER_API_TOKEN` | 道の駅マスタアプリ API トークン |
+| `KINTONE_VISIT_APP_ID` | 道の駅訪問履歴アプリ ID |
+| `KINTONE_VISIT_API_TOKEN` | 道の駅訪問履歴アプリ API トークン |
+| `KINTONE_WEBHOOK_TOKEN` | kintone Webhook トークン（改ざん防止） |
+| `VISIT_RADIUS_M` | 訪問判定の半径メートル（デフォルト: 250） |
+
+#### 4-3. kintone Webhook の設定
+
+1. Lambda の「設定」→「関数 URL」を有効化して URL を取得
+2. kintone GPS 履歴アプリの設定→「Webhook」に上記 URL を登録
+3. イベントは「レコードの追加」のみ選択
 
 ## 使い方
 
