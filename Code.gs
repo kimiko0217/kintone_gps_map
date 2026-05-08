@@ -1,3 +1,30 @@
+function fetchAllByCursor(domain, apiToken, app, fields, query) {
+  const url = 'https://' + domain + '/k/v1/records/cursor.json';
+  const authHeader = { 'X-Cybozu-API-Token': apiToken };
+
+  const createRes = JSON.parse(UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeader),
+    payload: JSON.stringify({ app: app, fields: fields, query: query, size: 500 }),
+    muteHttpExceptions: true
+  }).getContentText());
+
+  if (!createRes.id) throw new Error('Cursor create failed: ' + JSON.stringify(createRes));
+
+  const records = [];
+  let next = true;
+  while (next) {
+    const pageRes = JSON.parse(UrlFetchApp.fetch(url + '?id=' + createRes.id, {
+      method: 'get',
+      headers: authHeader,
+      muteHttpExceptions: true
+    }).getContentText());
+    (pageRes.records || []).forEach(function(r) { records.push(r); });
+    next = pageRes.next;
+  }
+  return records;
+}
+
 function haversine(lat1, lon1, lat2, lon2) {
   var R = 6371000;
   var dLat = (lat2 - lat1) * Math.PI / 180;
@@ -18,7 +45,7 @@ function doGet(e) {
 }
 
 function getPoints() {
-  const CACHE_KEY = 'gps_map_points_v14';
+  const CACHE_KEY = 'gps_map_points_v15';
   const CACHE_TTL = 300; // 5分
 
   const cache = CacheService.getScriptCache();
@@ -72,23 +99,10 @@ function getPoints() {
     const cutoff6Str = Utilities.formatDate(cutoff6, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
     const latestDateMs = new Date(latestJSTDate).getTime();
 
-    // Step1: GPSレコード取得（送信日時あり・27日前0時以降、最大4ページを並列取得）
-    const gpsFilter = fieldDatetime + ' >= "' + cutoff6Str + '" and ' + fieldDatetime + ' != "" order by ' + fieldDatetime + ' asc limit 500';
-    const gpsFields = [fieldLat, fieldLng, fieldDatetime, fieldKey, fieldType, fieldTemp]
-      .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
-    const gpsApiBase = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&' + gpsFields;
-    const fetchOptions = { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true };
-
-    const requests = [0, 500, 1000, 1500].map(function(offset) {
-      return Object.assign({
-        url: gpsApiBase + '&query=' + encodeURIComponent(gpsFilter + ' offset ' + offset)
-      }, fetchOptions);
-    });
-    const allGpsRecords = [];
-    UrlFetchApp.fetchAll(requests).forEach(function(response) {
-      const data = JSON.parse(response.getContentText());
-      (data.records || []).forEach(function(r) { allGpsRecords.push(r); });
-    });
+    // Step1: GPSレコード取得（カーソルAPIで必要件数のみ逐次取得）
+    const gpsFilter = fieldDatetime + ' >= "' + cutoff6Str + '" and ' + fieldDatetime + ' != "" order by ' + fieldDatetime + ' asc';
+    const gpsFieldsList = [fieldLat, fieldLng, fieldDatetime, fieldKey, fieldType, fieldTemp];
+    const allGpsRecords = fetchAllByCursor(domain, apiToken, appId, gpsFieldsList, gpsFilter);
 
     allGpsRecords.forEach(function(record) {
       const latVal = record[fieldLat] && record[fieldLat].value;
@@ -222,21 +236,10 @@ function getPointsByRange(fromDateStr, toDateStr) {
   let points = [];
 
   try {
-    const filter = fieldDatetime + ' >= "' + fromUtc + '" and ' + fieldDatetime + ' <= "' + toUtc + '" and ' + fieldDatetime + ' != "" order by ' + fieldDatetime + ' asc limit 500';
-    const gpsFields = [fieldLat, fieldLng, fieldDatetime, fieldKey, fieldType, fieldTemp]
-      .map(function(f, i) { return 'fields[' + i + ']=' + encodeURIComponent(f); }).join('&');
-    const gpsApiBase = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&' + gpsFields;
-    const fetchOptions = { method: 'get', headers: { 'X-Cybozu-API-Token': apiToken }, muteHttpExceptions: true };
-
-    // 最大5000件（10並列）
-    const requests = [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500].map(function(offset) {
-      return Object.assign({ url: gpsApiBase + '&query=' + encodeURIComponent(filter + ' offset ' + offset) }, fetchOptions);
-    });
-    const allGpsRecords = [];
-    UrlFetchApp.fetchAll(requests).forEach(function(response) {
-      const data = JSON.parse(response.getContentText());
-      (data.records || []).forEach(function(r) { allGpsRecords.push(r); });
-    });
+    // GPSレコード取得（カーソルAPIで必要件数のみ逐次取得）
+    const filter = fieldDatetime + ' >= "' + fromUtc + '" and ' + fieldDatetime + ' <= "' + toUtc + '" and ' + fieldDatetime + ' != "" order by ' + fieldDatetime + ' asc';
+    const gpsFieldsList = [fieldLat, fieldLng, fieldDatetime, fieldKey, fieldType, fieldTemp];
+    const allGpsRecords = fetchAllByCursor(domain, apiToken, appId, gpsFieldsList, filter);
 
     let latestDateMs = 0;
     allGpsRecords.forEach(function(r) {
