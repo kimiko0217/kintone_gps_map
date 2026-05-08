@@ -15,16 +15,37 @@ kintone に蓄積された GPS データを地図上に可視化する Google Ap
 - **ローディングスピナー** — 初期ロード・期間指定取得中に半透明オーバーレイを表示
 - **Google マップリンク** — ポップアップから各地点を Google マップで開ける
 
+## システム全体像
+
+```
+kintone GPS履歴アプリ
+    │
+    │ レコード追加 Webhook
+    ▼
+AWS Lambda（lambda/lambda_function.py）
+    │  道の駅マスタアプリ（kintone）と照合
+    │  250m 以内なら登録
+    ▼
+kintone 道の駅訪問履歴アプリ
+    │
+    │ API で取得
+    ▼
+GAS ウェブアプリ（このリポジトリ）── 地図に道の駅アイコンを表示
+```
+
 ## 構成
 
 ```
 .
-├── Code.gs           # GAS サーバーサイド（データ取得・加工）
-├── index.html        # フロントエンド（Leaflet.js による地図表示）
-├── appsscript.json   # GAS プロジェクト設定
-├── .env.example      # スクリプトプロパティのテンプレート
-└── images/
-    └── michinoeki_icon.png  # 道の駅マーカーアイコン
+├── Code.gs              # GAS サーバーサイド（データ取得・加工）
+├── index.html           # フロントエンド（Leaflet.js による地図表示）
+├── appsscript.json      # GAS プロジェクト設定
+├── .env.example         # GAS スクリプトプロパティのテンプレート
+├── images/
+│   └── michinoeki_icon.png  # 道の駅マーカーアイコン
+└── lambda/
+    ├── lambda_function.py   # 道の駅訪問検出 Lambda 関数
+    └── .env.example         # Lambda 環境変数のテンプレート
 ```
 
 ## 前提条件

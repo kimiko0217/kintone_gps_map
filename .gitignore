@@ -4,6 +4,7 @@
 
 # 環境変数（APIトークン等）
 .env
+lambda/.env
 
 # 未使用画像
 images/michinoeki_icon.png
