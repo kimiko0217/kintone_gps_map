@@ -133,7 +133,6 @@ Lambda の「設定」→「環境変数」に以下を登録します。`lambda
 | `KINTONE_MASTER_API_TOKEN` | 道の駅マスタアプリ API トークン |
 | `KINTONE_VISIT_APP_ID` | 道の駅訪問履歴アプリ ID |
 | `KINTONE_VISIT_API_TOKEN` | 道の駅訪問履歴アプリ API トークン |
-| `KINTONE_WEBHOOK_TOKEN` | kintone Webhook トークン（改ざん防止） |
 | `VISIT_RADIUS_M` | 訪問判定の半径メートル（デフォルト: 250） |
 
 #### 4-2-1. 道の駅マスタ CSV の生成（初回のみ）
