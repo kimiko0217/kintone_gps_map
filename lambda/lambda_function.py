@@ -164,7 +164,7 @@ def _diag_network() -> dict:
     """ネットワーク疎通診断"""
     import socket
     results = {}
-    for host in ["kimiko0217.cybozu.com", "www.google.com", "8.8.8.8"]:
+    for host in [DOMAIN, "www.google.com", "8.8.8.8"]:
         try:
             addrs = socket.getaddrinfo(host, 443, socket.AF_INET, socket.SOCK_STREAM)
             results[host] = addrs[0][4][0]
