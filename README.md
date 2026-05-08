@@ -42,7 +42,7 @@ GAS ウェブアプリ（このリポジトリ）── 地図に道の駅アイ
 ├── appsscript.json      # GAS プロジェクト設定
 ├── .env.example         # GAS スクリプトプロパティのテンプレート
 ├── images/
-│   └── michinoeki_icon.png  # 道の駅マーカーアイコン
+│   └── michinoeki.png       # 道の駅マーカーアイコン
 └── lambda/
     ├── lambda_function.py   # 道の駅訪問検出 Lambda 関数
     ├── .env.example         # Lambda 環境変数のテンプレート
