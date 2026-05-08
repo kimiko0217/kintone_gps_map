@@ -159,24 +159,16 @@ function getPoints() {
 
     // Step3: 道の駅訪問履歴（27日前以降）を取得してメモリ上でマッチング
     if (apiTokenMichinoekiRireki) {
-      const rekishiUrl = 'https://' + domain + '/k/v1/records.json'
-        + '?app=' + appIdMichinoekiRireki
-        + '&query=' + encodeURIComponent('作成日時 >= "' + cutoff6Str + '" order by ' + fieldKey + ' asc limit 500')
-        + '&fields[0]=' + encodeURIComponent(fieldKey)
-        + '&fields[1]=' + encodeURIComponent(fieldMichinoekiName);
-
-      const rekishiData = JSON.parse(UrlFetchApp.fetch(rekishiUrl, {
-        method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenMichinoekiRireki }, muteHttpExceptions: true
-      }).getContentText());
+      const rekishiRecords = fetchAllByCursor(domain, apiTokenMichinoekiRireki, appIdMichinoekiRireki,
+        [fieldKey, fieldMichinoekiName],
+        '作成日時 >= "' + cutoff6Str + '" order by ' + fieldKey + ' asc');
 
       const nameMap = {};
-      if (rekishiData.records) {
-        rekishiData.records.forEach(function(record) {
-          const k = record[fieldKey] && record[fieldKey].value;
-          const n = record[fieldMichinoekiName] && record[fieldMichinoekiName].value;
-          if (k) nameMap[k] = n || '';
-        });
-      }
+      rekishiRecords.forEach(function(record) {
+        const k = record[fieldKey] && record[fieldKey].value;
+        const n = record[fieldMichinoekiName] && record[fieldMichinoekiName].value;
+        if (k) nameMap[k] = n || '';
+      });
 
       // Step4: GPSレコードにname付加
       points.forEach(function(pt) { pt.name = nameMap[pt.key] || ''; });
@@ -296,22 +288,16 @@ function getPointsByRange(fromDateStr, toDateStr) {
     }
 
     if (apiTokenMichinoekiRireki) {
-      const rekishiUrl = 'https://' + domain + '/k/v1/records.json'
-        + '?app=' + appIdMichinoekiRireki
-        + '&query=' + encodeURIComponent('作成日時 >= "' + fromUtc + '" and 作成日時 <= "' + toUtc + '" order by ' + FIELD_KEY + ' asc limit 500')
-        + '&fields[0]=' + encodeURIComponent(fieldKey)
-        + '&fields[1]=' + encodeURIComponent(fieldMichinoekiName);
-      const rekishiData = JSON.parse(UrlFetchApp.fetch(rekishiUrl, {
-        method: 'get', headers: { 'X-Cybozu-API-Token': apiTokenMichinoekiRireki }, muteHttpExceptions: true
-      }).getContentText());
+      const rekishiRecords = fetchAllByCursor(domain, apiTokenMichinoekiRireki, appIdMichinoekiRireki,
+        [fieldKey, fieldMichinoekiName],
+        '作成日時 >= "' + fromUtc + '" and 作成日時 <= "' + toUtc + '" order by ' + fieldKey + ' asc');
+
       const nameMap = {};
-      if (rekishiData.records) {
-        rekishiData.records.forEach(function(record) {
-          const k = record[fieldKey]            && record[fieldKey].value;
-          const n = record[fieldMichinoekiName] && record[fieldMichinoekiName].value;
-          if (k) nameMap[k] = n || '';
-        });
-      }
+      rekishiRecords.forEach(function(record) {
+        const k = record[fieldKey]            && record[fieldKey].value;
+        const n = record[fieldMichinoekiName] && record[fieldMichinoekiName].value;
+        if (k) nameMap[k] = n || '';
+      });
       points.forEach(function(pt) { pt.name = nameMap[pt.key] || ''; });
     }
 
